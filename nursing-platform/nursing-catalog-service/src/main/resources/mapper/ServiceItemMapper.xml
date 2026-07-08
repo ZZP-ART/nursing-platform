@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.catalog.repository.ServiceItemMapper">
+
+    <sql id="VisibleItemWhere">
+        si.status = 1
+        AND si.is_deleted = 0
+        <if test="categoryId != null">
+            AND si.category_id = #{categoryId}
+        </if>
+    </sql>
+
+    <sql id="ItemPageColumns">
+        si.id AS item_id,
+        si.category_id,
+        sc.name AS category_name,
+        si.name,
+        si.description,
+        si.cover_image,
+        si.sort_order,
+        si.status,
+        (
+            SELECT MIN(ss.price)
+            FROM service_spec ss
+            WHERE ss.service_item_id = si.id
+              AND ss.status = 1
+              AND ss.is_deleted = 0
+        ) AS min_price
+    </sql>
+
+    <resultMap id="ItemPageMap" type="com.nursing.catalog.dto.vo.ItemPageVO">
+        <id property="itemId" column="item_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="name" column="name"/>
+        <result property="description" column="description"/>
+        <result property="coverImage" column="cover_image"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="status" column="status"/>
+        <result property="minPrice" column="min_price"/>
+    </resultMap>
+
+    <resultMap id="ItemDetailMap" type="com.nursing.catalog.dto.vo.ItemDetailVO">
+        <id property="itemId" column="item_id"/>
+        <result property="categoryId" column="category_id"/>
+        <result property="categoryName" column="category_name"/>
+        <result property="name" column="name"/>
+        <result property="description" column="description"/>
+        <result property="coverImage" column="cover_image"/>
+        <result property="sortOrder" column="sort_order"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="selectPage" resultMap="ItemPageMap">
+        SELECT
+        <include refid="ItemPageColumns"/>
+        FROM service_item si
+        LEFT JOIN service_category sc ON sc.id = si.category_id
+        WHERE <include refid="VisibleItemWhere"/>
+        ORDER BY si.sort_order ASC, si.id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="count" resultType="long">
+        SELECT COUNT(1)
+        FROM service_item si
+        WHERE <include refid="VisibleItemWhere"/>
+    </select>
+
+    <select id="selectById" resultMap="ItemDetailMap">
+        SELECT
+            si.id AS item_id,
+            si.category_id,
+            sc.name AS category_name,
+            si.name,
+            si.description,
+            si.cover_image,
+            si.sort_order,
+            si.status,
+            si.create_time
+        FROM service_item si
+        LEFT JOIN service_category sc ON sc.id = si.category_id
+        WHERE si.id = #{id}
+          AND si.status = 1
+          AND si.is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="searchPage" resultMap="ItemPageMap">
+        SELECT
+        <include refid="ItemPageColumns"/>
+        FROM service_item si
+        LEFT JOIN service_category sc ON sc.id = si.category_id
+        WHERE <include refid="VisibleItemWhere"/>
+          AND (si.name LIKE CONCAT('%', #{keyword}, '%')
+               OR si.description LIKE CONCAT('%', #{keyword}, '%'))
+        ORDER BY si.sort_order ASC, si.id ASC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="searchCount" resultType="long">
+        SELECT COUNT(1)
+        FROM service_item si
+        WHERE <include refid="VisibleItemWhere"/>
+          AND (si.name LIKE CONCAT('%', #{keyword}, '%')
+               OR si.description LIKE CONCAT('%', #{keyword}, '%'))
+    </select>
+</mapper>
