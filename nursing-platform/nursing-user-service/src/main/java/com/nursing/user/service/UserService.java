@@ -5,6 +5,7 @@ import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.user.constant.UserErrorCode;
 import com.nursing.user.dto.request.LoginRequest;
 import com.nursing.user.dto.request.RegisterRequest;
+import com.nursing.user.dto.request.ResetPasswordRequest;
 import com.nursing.user.dto.request.UpdateUserProfileRequest;
 import com.nursing.user.dto.response.AuthResponse;
 import com.nursing.user.dto.response.ProfileUpdateResponse;
@@ -27,6 +28,7 @@ public class UserService {
     private static final String LOGIN_MODE_SMS = "sms";
     private static final String SMS_TYPE_REGISTER = "register";
     private static final String SMS_TYPE_LOGIN = "login";
+    private static final String SMS_TYPE_RESET_PASSWORD = "reset_password";
 
     private final UserMapper userMapper;
     private final SmsService smsService;
@@ -102,6 +104,25 @@ public class UserService {
         String token = tokenService.resolveBearerToken(authorizationHeader);
         tokenService.validateToken(token);
         tokenService.invalidateToken(token);
+    }
+
+    @Transactional
+    public void resetPassword(ResetPasswordRequest request) {
+        User user = userMapper.selectByPhone(request.getPhone());
+        if (user == null) {
+            throw new UserBusinessException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    UserErrorCode.PHONE_NOT_REGISTERED,
+                    "手机号未注册");
+        }
+        smsService.verifySmsCode(request.getPhone(), SMS_TYPE_RESET_PASSWORD, request.getSmsCode());
+        if (passwordEncoder.matches(request.getNewPassword(), user.getPassword())) {
+            throw new UserBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    UserErrorCode.PASSWORD_SAME_AS_OLD,
+                    "新密码不能与旧密码相同");
+        }
+        userMapper.updatePassword(request.getPhone(), passwordEncoder.encode(request.getNewPassword()), LocalDateTime.now());
     }
 
     public UserInfoResponse getProfile(Long userId) {

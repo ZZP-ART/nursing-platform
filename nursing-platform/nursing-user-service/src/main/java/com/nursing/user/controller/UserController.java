@@ -3,6 +3,7 @@ package com.nursing.user.controller;
 import com.nursing.common.result.Result;
 import com.nursing.user.dto.request.LoginRequest;
 import com.nursing.user.dto.request.RegisterRequest;
+import com.nursing.user.dto.request.ResetPasswordRequest;
 import com.nursing.user.dto.request.UpdateUserProfileRequest;
 import com.nursing.user.dto.response.AuthResponse;
 import com.nursing.user.dto.response.ProfileUpdateResponse;
@@ -49,6 +50,14 @@ public class UserController {
         userService.logout(authorizationHeader);
         Result<Void> result = Result.success();
         result.setMessage("登出成功");
+        return result;
+    }
+
+    @PostMapping("/password/reset")
+    public Result<Void> resetPassword(@RequestBody @Valid ResetPasswordRequest request) {
+        userService.resetPassword(request);
+        Result<Void> result = Result.success();
+        result.setMessage("密码重置成功");
         return result;
     }
 
