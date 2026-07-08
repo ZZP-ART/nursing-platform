@@ -36,6 +36,17 @@
  
  # Snowflake ID worker config
  nursing:
+   jwt:
+     expire-seconds: 604800
+     secret: ${NURSING_JWT_SECRET:}
+   sms:
+     mock: true
+     rate-limit-seconds: 60
+     daily-limit: 5
+     expire-seconds: 300
+   file:
+     upload-dir: ${NURSING_UPLOAD_DIR:uploads}
+     public-base-url: ${NURSING_FILE_PUBLIC_BASE_URL:http://localhost:8081/uploads}
    snowflake:
      worker-id: 1
      datacenter-id: 1

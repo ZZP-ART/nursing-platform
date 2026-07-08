@@ -41,3 +41,14 @@
    snowflake:
      worker-id: 3
      datacenter-id: 1
+   payment:
+     mock: true
+     alipay:
+       app-id: mock-app-id
+       public-key: mock-public-key
+       private-key: mock-private-key
+       notify-url: http://localhost:8083/api/v1/orders/pay/callback
+   kafka:
+     order-events-topic: order_events
+     outbox-fixed-delay: 5000
+     outbox-batch-size: 50

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.order.repository.OrderOperationLogMapper">
+    <resultMap id="OrderOperationLogMap" type="com.nursing.order.entity.OrderOperationLog">
+        <id column="id" property="id"/>
+        <result column="order_id" property="orderId"/>
+        <result column="order_no" property="orderNo"/>
+        <result column="user_id" property="userId"/>
+        <result column="operator" property="operator"/>
+        <result column="action" property="action"/>
+        <result column="from_status" property="fromStatus"/>
+        <result column="to_status" property="toStatus"/>
+        <result column="remark" property="remark"/>
+        <result column="create_time" property="createTime"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.order.entity.OrderOperationLog">
+        INSERT INTO order_operation_log (
+            id, order_id, order_no, user_id, operator, action, from_status, to_status, remark
+        ) VALUES (
+            #{id}, #{orderId}, #{orderNo}, #{userId}, #{operator}, #{action}, #{fromStatus}, #{toStatus}, #{remark}
+        )
+    </insert>
+
+    <select id="selectByOrderId" resultMap="OrderOperationLogMap">
+        SELECT id, order_id, order_no, user_id, operator, action, from_status, to_status, remark, create_time
+        FROM order_operation_log
+        WHERE order_id = #{orderId}
+        ORDER BY create_time DESC
+    </select>
+</mapper>

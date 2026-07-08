@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.SmsRecordMapper">
+
+    <resultMap id="SmsRecordResultMap" type="com.nursing.user.entity.SmsRecord">
+        <id property="id" column="id"/>
+        <result property="phone" column="phone"/>
+        <result property="smsType" column="sms_type"/>
+        <result property="code" column="code"/>
+        <result property="status" column="status"/>
+        <result property="sendTime" column="send_time"/>
+        <result property="expireTime" column="expire_time"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.user.entity.SmsRecord">
+        INSERT INTO sms_record (
+            id, phone, sms_type, code, status, send_time, expire_time, create_time
+        ) VALUES (
+            #{id}, #{phone}, #{smsType}, #{code}, #{status}, #{sendTime}, #{expireTime}, #{createTime}
+        )
+    </insert>
+
+    <select id="countTodayByPhone" resultType="int">
+        SELECT COUNT(1)
+        FROM sms_record
+        WHERE phone = #{phone}
+          AND send_time &gt;= CURDATE()
+          AND send_time &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+    </select>
+</mapper>

@@ -2,17 +2,19 @@
  
  USE catalog_db;
  
- CREATE TABLE IF NOT EXISTS service_category (
-     id              BIGINT NOT NULL COMMENT '分类ID(雪花算法)',
-     name            VARCHAR(64) NOT NULL COMMENT '分类名称',
-     icon            VARCHAR(256) COMMENT '分类图标URL',
-     sort_order      INT DEFAULT 0 COMMENT '排序',
-     status          TINYINT DEFAULT 1 COMMENT '0隐藏 1展示',
-     is_deleted      TINYINT DEFAULT 0 COMMENT '0未删 1已删',
-     create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-     update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-     PRIMARY KEY (id)
- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务分类表';
+CREATE TABLE IF NOT EXISTS service_category (
+    id              BIGINT NOT NULL COMMENT '分类ID(雪花算法)',
+    parent_id       BIGINT DEFAULT 0 COMMENT '父分类ID(0表示顶级)',
+    name            VARCHAR(64) NOT NULL COMMENT '分类名称',
+    icon            VARCHAR(256) COMMENT '分类图标URL',
+    sort_order      INT DEFAULT 0 COMMENT '排序',
+    status          TINYINT DEFAULT 1 COMMENT '0隐藏 1展示',
+    is_deleted      TINYINT DEFAULT 0 COMMENT '0未删 1已删',
+    create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    INDEX idx_parent (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务分类表';
  
  CREATE TABLE IF NOT EXISTS service_item (
      id              BIGINT NOT NULL COMMENT '服务项目ID(雪花算法)',
@@ -44,14 +46,19 @@
      INDEX idx_service_item (service_item_id)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务规格表';
  
- -- ========== 种子数据 ==========
- -- 服务分类
- INSERT INTO service_category (id, name, icon, sort_order, status)
- VALUES
-     (101, '康复护理', 'https://via.placeholder.com/48', 1, 1),
-     (102, '健康体检', 'https://via.placeholder.com/48', 2, 1),
-     (103, '家政护理', 'https://via.placeholder.com/48', 3, 1),
-     (104, '中医理疗', 'https://via.placeholder.com/48', 4, 1);
+-- ========== 种子数据 ==========
+-- 服务分类
+ INSERT INTO service_category (id, parent_id, name, icon, sort_order, status)
+VALUES
+    (101, 0, '康复护理', 'https://via.placeholder.com/48', 1, 1),
+    (102, 0, '健康体检', 'https://via.placeholder.com/48', 2, 1),
+    (103, 0, '家政护理', 'https://via.placeholder.com/48', 3, 1),
+    (104, 0, '中医理疗', 'https://via.placeholder.com/48', 4, 1),
+    (111, 101, '术后康复', 'https://via.placeholder.com/48', 1, 1),
+    (112, 101, '老年康复', 'https://via.placeholder.com/48', 2, 1),
+    (121, 102, '上门体检', 'https://via.placeholder.com/48', 1, 1),
+    (131, 103, '居家照护', 'https://via.placeholder.com/48', 1, 1),
+    (141, 104, '推拿艾灸', 'https://via.placeholder.com/48', 1, 1);
  
  -- 服务项目
  INSERT INTO service_item (id, category_id, name, description, status, sort_order)

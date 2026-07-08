@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.feedback.repository.IdempotentRecordMapper">
+    <insert id="insert" parameterType="com.nursing.feedback.entity.IdempotentRecord">
+        INSERT INTO idempotent_record
+        (id, idempotent_key, biz_type, biz_id, status, expire_time, create_time)
+        VALUES
+        (#{id}, #{idempotentKey}, #{bizType}, #{bizId}, #{status}, #{expireTime}, #{createTime})
+    </insert>
+
+    <select id="selectByKey" resultType="com.nursing.feedback.entity.IdempotentRecord">
+        SELECT id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+        FROM idempotent_record
+        WHERE idempotent_key = #{idempotentKey}
+        LIMIT 1
+    </select>
+
+    <update id="updateCompleted">
+        UPDATE idempotent_record
+        SET status = 1,
+            biz_id = #{bizId}
+        WHERE idempotent_key = #{idempotentKey}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE idempotent_record
+        SET status = #{status}
+        WHERE idempotent_key = #{idempotentKey}
+    </update>
+</mapper>
