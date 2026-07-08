@@ -7,6 +7,7 @@ import com.nursing.order.dto.response.PayResponse;
 import com.nursing.order.entity.OrderHeader;
 import com.nursing.order.entity.OrderOperationLog;
 import com.nursing.order.entity.PaymentRecord;
+import com.nursing.order.event.OrderEventPublisher;
 import com.nursing.order.repository.OrderHeaderMapper;
 import com.nursing.order.repository.OrderOperationLogMapper;
 import com.nursing.order.repository.PaymentRecordMapper;
@@ -32,6 +33,7 @@ public class PaymentService {
     private final OrderHeaderMapper orderHeaderMapper;
     private final PaymentRecordMapper paymentRecordMapper;
     private final OrderOperationLogMapper orderOperationLogMapper;
+    private final OrderEventPublisher orderEventPublisher;
     private final SnowflakeIdWorker snowflakeIdWorker;
     private final boolean mockPayment;
     private final String notifyUrl;
@@ -39,12 +41,14 @@ public class PaymentService {
     public PaymentService(OrderHeaderMapper orderHeaderMapper,
                           PaymentRecordMapper paymentRecordMapper,
                           OrderOperationLogMapper orderOperationLogMapper,
+                          OrderEventPublisher orderEventPublisher,
                           SnowflakeIdWorker snowflakeIdWorker,
                           @Value("${nursing.payment.mock:true}") boolean mockPayment,
                           @Value("${nursing.payment.alipay.notify-url:}") String notifyUrl) {
         this.orderHeaderMapper = orderHeaderMapper;
         this.paymentRecordMapper = paymentRecordMapper;
         this.orderOperationLogMapper = orderOperationLogMapper;
+        this.orderEventPublisher = orderEventPublisher;
         this.snowflakeIdWorker = snowflakeIdWorker;
         this.mockPayment = mockPayment;
         this.notifyUrl = notifyUrl;
@@ -112,6 +116,7 @@ public class PaymentService {
             log.setToStatus(1);
             log.setRemark("支付宝支付成功");
             orderOperationLogMapper.insert(log);
+            orderEventPublisher.saveOrderPaidEvent(order, record.getPayTime());
         }
         return "success";
     }
