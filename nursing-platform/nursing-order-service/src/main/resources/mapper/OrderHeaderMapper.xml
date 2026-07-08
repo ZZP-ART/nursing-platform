@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.order.repository.OrderHeaderMapper">
+    <resultMap id="OrderHeaderMap" type="com.nursing.order.entity.OrderHeader">
+        <id column="id" property="id"/>
+        <result column="order_no" property="orderNo"/>
+        <result column="user_id" property="userId"/>
+        <result column="source" property="source"/>
+        <result column="version" property="version"/>
+        <result column="service_item_id" property="serviceItemId"/>
+        <result column="service_spec_id" property="serviceSpecId"/>
+        <result column="service_item_name" property="serviceItemName"/>
+        <result column="spec_name" property="specName"/>
+        <result column="spec_price" property="specPrice"/>
+        <result column="spec_duration" property="specDuration"/>
+        <result column="address_id" property="addressId"/>
+        <result column="receiver_name" property="receiverName"/>
+        <result column="receiver_phone" property="receiverPhone"/>
+        <result column="address_detail" property="addressDetail"/>
+        <result column="service_date" property="serviceDate"/>
+        <result column="service_time_slot" property="serviceTimeSlot"/>
+        <result column="total_amount" property="totalAmount"/>
+        <result column="status" property="status"/>
+        <result column="remark" property="remark"/>
+        <result column="cancel_reason" property="cancelReason"/>
+        <result column="is_deleted" property="isDeleted"/>
+        <result column="create_time" property="createTime"/>
+        <result column="update_time" property="updateTime"/>
+    </resultMap>
+
+    <sql id="BaseColumns">
+        id, order_no, user_id, source, version, service_item_id, service_spec_id,
+        service_item_name, spec_name, spec_price, spec_duration, address_id,
+        receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
+        total_amount, status, remark, cancel_reason, is_deleted, create_time, update_time
+    </sql>
+
+    <insert id="insert" parameterType="com.nursing.order.entity.OrderHeader">
+        INSERT INTO order_header (
+            id, order_no, user_id, source, version, service_item_id, service_spec_id,
+            service_item_name, spec_name, spec_price, spec_duration, address_id,
+            receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
+            total_amount, status, remark, cancel_reason, is_deleted
+        ) VALUES (
+            #{id}, #{orderNo}, #{userId}, #{source}, #{version}, #{serviceItemId}, #{serviceSpecId},
+            #{serviceItemName}, #{specName}, #{specPrice}, #{specDuration}, #{addressId},
+            #{receiverName}, #{receiverPhone}, #{addressDetail}, #{serviceDate}, #{serviceTimeSlot},
+            #{totalAmount}, #{status}, #{remark}, #{cancelReason}, COALESCE(#{isDeleted}, 0)
+        )
+    </insert>
+
+    <select id="selectById" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE id = #{id} AND is_deleted = 0
+    </select>
+
+    <select id="selectByIdAndUserId" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE id = #{id} AND user_id = #{userId} AND is_deleted = 0
+    </select>
+
+    <select id="selectByOrderNo" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE order_no = #{orderNo} AND is_deleted = 0
+    </select>
+
+    <select id="selectPage" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE user_id = #{userId} AND is_deleted = 0
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="long">
+        SELECT COUNT(1)
+        FROM order_header
+        WHERE user_id = #{userId} AND is_deleted = 0
+        <if test="status != null">
+            AND status = #{status}
+        </if>
+    </select>
+
+    <select id="countUserServiceSlot" resultType="int">
+        SELECT COUNT(1)
+        FROM order_header
+        WHERE user_id = #{userId}
+          AND service_item_id = #{serviceItemId}
+          AND service_date = #{serviceDate}
+          AND service_time_slot = #{serviceTimeSlot}
+          AND status IN (0, 1)
+          AND is_deleted = 0
+    </select>
+
+    <update id="updateStatusByIdVersion">
+        UPDATE order_header
+        SET status = #{toStatus},
+            version = version + 1,
+            cancel_reason = #{cancelReason},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND status = #{fromStatus}
+          AND version = #{version}
+          AND is_deleted = 0
+    </update>
+
+    <update id="updateStatusByOrderNo">
+        UPDATE order_header
+        SET status = #{toStatus},
+            version = version + 1,
+            update_time = NOW()
+        WHERE order_no = #{orderNo}
+          AND status = #{fromStatus}
+          AND is_deleted = 0
+    </update>
+</mapper>

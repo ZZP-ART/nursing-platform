@@ -50,3 +50,5 @@
        notify-url: http://localhost:8083/api/v1/orders/pay/callback
    kafka:
      order-events-topic: order_events
+     outbox-fixed-delay: 5000
+     outbox-batch-size: 50
