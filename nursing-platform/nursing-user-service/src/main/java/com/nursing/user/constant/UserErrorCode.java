@@ -2,6 +2,8 @@ package com.nursing.user.constant;
 
 public final class UserErrorCode {
 
+    public static final int TOKEN_BLACKLISTED = 1003;
+
     public static final int SMS_SEND_TOO_FREQUENT = 2001;
     public static final int SMS_DAILY_LIMIT_REACHED = 2002;
     public static final int PHONE_ALREADY_REGISTERED = 2003;
