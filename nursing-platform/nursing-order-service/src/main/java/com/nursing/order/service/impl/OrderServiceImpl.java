@@ -4,17 +4,26 @@ import com.nursing.common.dto.ServiceItemDTO;
 import com.nursing.common.dto.ServiceSpecDTO;
 import com.nursing.common.exception.BusinessException;
 import com.nursing.common.feign.CatalogServiceFeignClient;
+import com.nursing.common.result.PageResult;
 import com.nursing.common.result.Result;
 import com.nursing.common.util.SnowflakeIdWorker;
+import com.nursing.order.dto.request.CancelOrderRequest;
 import com.nursing.order.dto.request.OrderCreateRequest;
+import com.nursing.order.dto.request.OrderPageQuery;
+import com.nursing.order.dto.response.CancelResponse;
 import com.nursing.order.dto.response.OrderCreateResponse;
+import com.nursing.order.dto.response.OrderDetailResponse;
+import com.nursing.order.dto.response.OrderListResponse;
+import com.nursing.order.dto.response.OrderOperationLogResponse;
 import com.nursing.order.entity.IdempotentRecord;
 import com.nursing.order.entity.OrderHeader;
 import com.nursing.order.entity.OrderOperationLog;
+import com.nursing.order.entity.PaymentRecord;
 import com.nursing.order.entity.UserAddress;
 import com.nursing.order.repository.OrderHeaderMapper;
 import com.nursing.order.repository.OrderOperationLogMapper;
 import com.nursing.order.repository.OrderSequenceMapper;
+import com.nursing.order.repository.PaymentRecordMapper;
 import com.nursing.order.repository.UserAddressMapper;
 import com.nursing.order.service.IOrderService;
 import com.nursing.order.service.IdempotentService;
@@ -35,6 +44,9 @@ public class OrderServiceImpl implements IOrderService {
     private static final int ITEM_UNAVAILABLE = 3003;
     private static final int SPEC_UNAVAILABLE = 3004;
     private static final int ADDRESS_INVALID = 3006;
+    private static final int ORDER_NOT_FOUND = 3007;
+    private static final int ORDER_FORBIDDEN = 3008;
+    private static final int ORDER_CANCEL_INVALID = 3009;
 
     private final IdempotentService idempotentService;
     private final CatalogServiceFeignClient catalogServiceFeignClient;
@@ -42,6 +54,7 @@ public class OrderServiceImpl implements IOrderService {
     private final OrderHeaderMapper orderHeaderMapper;
     private final OrderOperationLogMapper orderOperationLogMapper;
     private final OrderSequenceMapper orderSequenceMapper;
+    private final PaymentRecordMapper paymentRecordMapper;
     private final SnowflakeIdWorker snowflakeIdWorker;
 
     public OrderServiceImpl(IdempotentService idempotentService,
@@ -50,6 +63,7 @@ public class OrderServiceImpl implements IOrderService {
                             OrderHeaderMapper orderHeaderMapper,
                             OrderOperationLogMapper orderOperationLogMapper,
                             OrderSequenceMapper orderSequenceMapper,
+                            PaymentRecordMapper paymentRecordMapper,
                             SnowflakeIdWorker snowflakeIdWorker) {
         this.idempotentService = idempotentService;
         this.catalogServiceFeignClient = catalogServiceFeignClient;
@@ -57,6 +71,7 @@ public class OrderServiceImpl implements IOrderService {
         this.orderHeaderMapper = orderHeaderMapper;
         this.orderOperationLogMapper = orderOperationLogMapper;
         this.orderSequenceMapper = orderSequenceMapper;
+        this.paymentRecordMapper = paymentRecordMapper;
         this.snowflakeIdWorker = snowflakeIdWorker;
     }
 
@@ -93,6 +108,61 @@ public class OrderServiceImpl implements IOrderService {
         orderOperationLogMapper.insert(buildCreateLog(order));
         idempotentService.complete(idempotentKey, order.getId());
         return new OrderCreateResponse(order.getId(), order.getOrderNo());
+    }
+
+    @Override
+    public PageResult<OrderListResponse> listOrders(Long userId, OrderPageQuery query) {
+        var orders = orderHeaderMapper.selectPage(userId, query.getStatus(), query.offset(), query.getSize())
+                .stream()
+                .map(this::toListResponse)
+                .toList();
+        long total = orderHeaderMapper.countPage(userId, query.getStatus());
+        return PageResult.of(orders, total, query.getPage(), query.getSize());
+    }
+
+    @Override
+    public OrderDetailResponse getOrderDetail(Long userId, Long orderId) {
+        OrderHeader order = requireOwnedOrder(userId, orderId);
+        PaymentRecord payment = paymentRecordMapper.selectByOrderId(orderId);
+        var logs = orderOperationLogMapper.selectByOrderId(orderId).stream()
+                .map(log -> new OrderOperationLogResponse(log.getAction(), log.getFromStatus(),
+                        log.getToStatus(), log.getRemark(), log.getCreateTime()))
+                .toList();
+        return new OrderDetailResponse(order.getId(), order.getOrderNo(), order.getServiceItemName(),
+                order.getSpecName(), order.getSpecPrice(), order.getTotalAmount(), order.getStatus(),
+                order.getReceiverName(), order.getReceiverPhone(), order.getAddressDetail(),
+                order.getServiceDate(), order.getServiceTimeSlot(), payment == null ? null : payment.getPayStatus(),
+                logs, order.getCreateTime());
+    }
+
+    @Override
+    @Transactional
+    public CancelResponse cancelOrder(Long userId, Long orderId, CancelOrderRequest request) {
+        OrderHeader order = requireOwnedOrder(userId, orderId);
+        if (Integer.valueOf(3).equals(order.getStatus())) {
+            return new CancelResponse(order.getId(), order.getStatus(), "NO_REFUND");
+        }
+        if (!Integer.valueOf(0).equals(order.getStatus()) && !Integer.valueOf(1).equals(order.getStatus())) {
+            throw new BusinessException(ORDER_CANCEL_INVALID, "当前状态不可取消");
+        }
+        String reason = request == null ? null : request.getCancelReason();
+        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), order.getStatus(), 3,
+                order.getVersion(), reason);
+        if (updated == 0) {
+            throw new BusinessException(ORDER_CANCEL_INVALID, "当前状态不可取消");
+        }
+        OrderOperationLog log = new OrderOperationLog();
+        log.setId(snowflakeIdWorker.nextId());
+        log.setOrderId(order.getId());
+        log.setOrderNo(order.getOrderNo());
+        log.setUserId(userId);
+        log.setOperator("USER");
+        log.setAction("cancel");
+        log.setFromStatus(order.getStatus());
+        log.setToStatus(3);
+        log.setRemark(reason);
+        orderOperationLogMapper.insert(log);
+        return new CancelResponse(order.getId(), 3, Integer.valueOf(1).equals(order.getStatus()) ? "REFUNDING" : "NO_REFUND");
     }
 
     private IdempotentRecord lockUsableToken(String idempotentKey) {
@@ -190,5 +260,23 @@ public class OrderServiceImpl implements IOrderService {
         log.setToStatus(0);
         log.setRemark("用户创建订单");
         return log;
+    }
+
+    private OrderHeader requireOwnedOrder(Long userId, Long orderId) {
+        OrderHeader order = orderHeaderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(ORDER_NOT_FOUND, "订单不存在");
+        }
+        if (!Objects.equals(order.getUserId(), userId)) {
+            throw new BusinessException(ORDER_FORBIDDEN, "无权操作此订单");
+        }
+        return order;
+    }
+
+    private OrderListResponse toListResponse(OrderHeader order) {
+        return new OrderListResponse(order.getId(), order.getOrderNo(), order.getServiceItemName(),
+                order.getSpecName(), order.getSpecPrice(), order.getTotalAmount(), order.getStatus(),
+                order.getServiceDate(), order.getServiceTimeSlot(), order.getReceiverName(),
+                order.getReceiverPhone(), order.getAddressDetail(), order.getCreateTime());
     }
 }

@@ -18,6 +18,7 @@ public record OrderDetailResponse(
         String addressDetail,
         LocalDate serviceDate,
         String serviceTimeSlot,
+        Integer payStatus,
         List<OrderOperationLogResponse> operationLogs,
         LocalDateTime createTime) {
 }
