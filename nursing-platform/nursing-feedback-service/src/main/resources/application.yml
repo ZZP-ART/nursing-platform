@@ -1,0 +1,36 @@
+ server:
+   port: 8084
+ 
+ spring:
+   application:
+     name: nursing-feedback-service
+   datasource:
+     url: jdbc:mysql://localhost:3306/feedback_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+     username: root
+     password: root123
+     driver-class-name: com.mysql.cj.jdbc.Driver
+     hikari:
+       maximum-pool-size: 10
+       minimum-idle: 3
+   cloud:
+     nacos:
+       discovery:
+         server-addr: localhost:8848
+   kafka:
+     bootstrap-servers: localhost:9092
+     consumer:
+       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+       value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+       group-id: feedback-group
+ 
+ mybatis:
+   mapper-locations: classpath:mapper/*.xml
+   type-aliases-package: com.nursing.feedback.entity
+   configuration:
+     map-underscore-to-camel-case: true
+     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+ 
+ nursing:
+   snowflake:
+     worker-id: 4
+     datacenter-id: 1

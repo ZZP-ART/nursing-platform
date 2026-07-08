@@ -1,0 +1,90 @@
+ version: "3.9"
+ 
+ services:
+   mysql:
+     image: mysql:8.0
+     container_name: nursing-mysql
+     restart: unless-stopped
+     environment:
+       MYSQL_ROOT_PASSWORD: root123
+     ports:
+       - "3306:3306"
+     volumes:
+       - ./mysql/init:/docker-entrypoint-initdb.d
+       - mysql-data:/var/lib/mysql
+     healthcheck:
+       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+       interval: 10s
+       retries: 5
+       start_period: 30s
+     networks:
+       - nursing-net
+ 
+   redis:
+     image: redis:7-alpine
+     container_name: nursing-redis
+     restart: unless-stopped
+     ports:
+       - "6379:6379"
+     volumes:
+       - redis-data:/data
+     healthcheck:
+       test: ["CMD", "redis-cli", "ping"]
+       interval: 10s
+       retries: 5
+     networks:
+       - nursing-net
+ 
+   nacos:
+     image: nacos/nacos-server:v2.5.1
+     container_name: nursing-nacos
+     restart: unless-stopped
+     environment:
+       MODE: standalone
+       SPRING_DATASOURCE_PLATFORM: embedded
+     ports:
+       - "8848:8848"
+     healthcheck:
+       test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/actuator/health"]
+       interval: 30s
+       retries: 3
+       start_period: 60s
+     networks:
+       - nursing-net
+ 
+   zookeeper:
+     image: confluentinc/cp-zookeeper:7.7.2
+     container_name: nursing-zookeeper
+     restart: unless-stopped
+     environment:
+       ZOOKEEPER_CLIENT_PORT: 2181
+       ZOOKEEPER_TICK_TIME: 2000
+     ports:
+       - "2181:2181"
+     networks:
+       - nursing-net
+ 
+   kafka:
+     image: confluentinc/cp-kafka:7.7.2
+     container_name: nursing-kafka
+     restart: unless-stopped
+     depends_on:
+       - zookeeper
+     environment:
+       KAFKA_BROKER_ID: 1
+       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+     ports:
+       - "9092:9092"
+     networks:
+       - nursing-net
+ 
+ volumes:
+   mysql-data:
+   redis-data:
+ 
+ networks:
+   nursing-net:
+     driver: bridge

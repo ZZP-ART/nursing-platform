@@ -1,0 +1,7 @@
+ logging:
+   level:
+     com.nursing: DEBUG
+ 
+ nursing:
+   payment:
+     mock: true

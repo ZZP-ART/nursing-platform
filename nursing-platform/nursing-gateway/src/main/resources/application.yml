@@ -1,0 +1,32 @@
+ server:
+   port: 8080
+ 
+ spring:
+   application:
+     name: nursing-gateway
+   cloud:
+     gateway:
+       routes:
+         # - id: user-service
+         #   uri: lb://nursing-user-service
+         #   predicates:
+         #     - Path=/api/v1/users/**,/api/v1/files/**
+         # - id: catalog-service
+         #   uri: lb://nursing-catalog-service
+         #   predicates:
+         #     - Path=/api/v1/categories/**,/api/v1/items/**
+         # - id: order-service
+         #   uri: lb://nursing-order-service
+         #   predicates:
+         #     - Path=/api/v1/orders/**,/api/v1/addresses/**
+         # - id: feedback-service
+         #   uri: lb://nursing-feedback-service
+         #   predicates:
+         #     - Path=/api/v1/reviews/**,/api/v1/complaints/**
+     nacos:
+       discovery:
+         server-addr: localhost:8848
+   data:
+     redis:
+       host: localhost
+       port: 6379
