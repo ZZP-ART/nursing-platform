@@ -4,9 +4,7 @@ import com.nursing.common.constant.ApiCode;
 import com.nursing.common.constant.OrderStatus;
 import com.nursing.common.dto.OrderDTO;
 import com.nursing.common.exception.BusinessException;
-import com.nursing.common.feign.OrderFeignClient;
 import com.nursing.common.result.PageResult;
-import com.nursing.common.result.Result;
 import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.feedback.dto.request.SubmitReviewRequest;
 import com.nursing.feedback.dto.response.ReviewSubmitResponse;
@@ -14,6 +12,7 @@ import com.nursing.feedback.dto.response.ReviewVO;
 import com.nursing.feedback.entity.IdempotentRecord;
 import com.nursing.feedback.entity.Review;
 import com.nursing.feedback.entity.ReviewImage;
+import com.nursing.feedback.integration.OrderQueryService;
 import com.nursing.feedback.repository.IdempotentRecordMapper;
 import com.nursing.feedback.repository.ReviewImageMapper;
 import com.nursing.feedback.repository.ReviewMapper;
@@ -25,8 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,7 +32,6 @@ import org.springframework.util.StringUtils;
 
 @Service
 public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewService {
-    private static final Logger log = LoggerFactory.getLogger(ReviewServiceImpl.class);
     private static final String BIZ_TYPE_REVIEW = "REVIEW";
     private static final int REVIEW_STATUS_PENDING = 1;
     private static final int NOT_DELETED = 0;
@@ -46,18 +42,18 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
     private final ReviewMapper reviewMapper;
     private final ReviewImageMapper reviewImageMapper;
     private final IdempotentRecordMapper idempotentRecordMapper;
-    private final OrderFeignClient orderFeignClient;
+    private final OrderQueryService orderQueryService;
     private final SnowflakeIdWorker snowflakeIdWorker;
 
     public ReviewServiceImpl(ReviewMapper reviewMapper,
                              ReviewImageMapper reviewImageMapper,
                              IdempotentRecordMapper idempotentRecordMapper,
-                             OrderFeignClient orderFeignClient,
+                             OrderQueryService orderQueryService,
                              SnowflakeIdWorker snowflakeIdWorker) {
         this.reviewMapper = reviewMapper;
         this.reviewImageMapper = reviewImageMapper;
         this.idempotentRecordMapper = idempotentRecordMapper;
-        this.orderFeignClient = orderFeignClient;
+        this.orderQueryService = orderQueryService;
         this.snowflakeIdWorker = snowflakeIdWorker;
     }
 
@@ -70,14 +66,14 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
             if (Integer.valueOf(IDEMPOTENT_COMPLETED).equals(existingRecord.getStatus()) && existingRecord.getBizId() != null) {
                 return new ReviewSubmitResponse(existingRecord.getBizId());
             }
-            throw new BusinessException(ApiCode.CONFLICT, "请求正在处理中");
+            throw new BusinessException(ApiCode.CONFLICT, "Request is processing");
         }
 
         createProcessingRecord(key);
         OrderDTO order = requireReviewableOrder(request.getOrderId(), userId);
         Review duplicate = reviewMapper.selectByOrderId(request.getOrderId());
         if (duplicate != null) {
-            throw new BusinessException(ApiCode.REVIEW_DUPLICATE, "该订单已评价");
+            throw new BusinessException(ApiCode.REVIEW_DUPLICATE, "Order already reviewed");
         }
 
         LocalDateTime now = LocalDateTime.now();
@@ -106,7 +102,7 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
     @Override
     public PageResult<ReviewVO> pageReviews(Long itemId, int page, int size) {
         if (itemId == null || itemId <= 0) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "itemId不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "itemId is required");
         }
         int safePage = Math.max(page, 1);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
@@ -126,11 +122,11 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
 
     private String requireIdempotentKey(String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey)) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is required");
         }
         String key = idempotentKey.trim();
         if (key.length() > 128) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key过长");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is too long");
         }
         return key;
     }
@@ -147,41 +143,30 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
         try {
             idempotentRecordMapper.insert(record);
         } catch (DuplicateKeyException ex) {
-            IdempotentRecord existing = idempotentRecordMapper.selectByKey(key);
-            if (existing != null && Integer.valueOf(IDEMPOTENT_COMPLETED).equals(existing.getStatus()) && existing.getBizId() != null) {
-                throw new BusinessException(ApiCode.CONFLICT, "重复请求，请稍后查询结果");
-            }
-            throw new BusinessException(ApiCode.CONFLICT, "请求正在处理中");
+            throw new BusinessException(ApiCode.CONFLICT, "Duplicate request");
         }
     }
 
     private OrderDTO requireReviewableOrder(Long orderId, Long userId) {
         OrderDTO order = getOrder(orderId);
         if (!Objects.equals(order.getUserId(), userId)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权操作该订单");
+            throw new BusinessException(ApiCode.FORBIDDEN, "No permission for this order");
         }
         if (!Integer.valueOf(OrderStatus.COMPLETED.getValue()).equals(order.getStatus())) {
-            throw new BusinessException(ApiCode.REVIEW_ORDER_STATUS_INVALID, "订单状态不可评价");
+            throw new BusinessException(ApiCode.REVIEW_ORDER_STATUS_INVALID, "Order status cannot be reviewed");
         }
         return order;
     }
 
     private OrderDTO getOrder(Long orderId) {
         if (orderId == null || orderId <= 0) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "orderId不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "orderId is required");
         }
-        try {
-            Result<OrderDTO> result = orderFeignClient.getOrder(orderId);
-            if (result == null || result.getCode() != ApiCode.SUCCESS || result.getData() == null) {
-                throw new BusinessException(ApiCode.NOT_FOUND, "订单不存在");
-            }
-            return result.getData();
-        } catch (BusinessException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            log.warn("Failed to query order: orderId={}", orderId, ex);
-            throw new BusinessException(ApiCode.BIZ_ERROR, "订单服务暂不可用");
+        OrderDTO order = orderQueryService.getOrder(orderId);
+        if (order == null) {
+            throw new BusinessException(ApiCode.NOT_FOUND, "Order not found");
         }
+        return order;
     }
 
     private List<ReviewImage> buildReviewImages(Long reviewId, List<String> imageUrls) {
@@ -233,23 +218,19 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
     }
 
     private void enrichOrderInfo(ReviewVO vo, Long orderId) {
-        try {
-            Result<OrderDTO> result = orderFeignClient.getOrder(orderId);
-            if (result != null && result.getCode() == ApiCode.SUCCESS && result.getData() != null) {
-                vo.setServiceItemName(result.getData().getServiceItemName());
-                vo.setSpecName(result.getData().getSpecName());
-            }
-        } catch (Exception ex) {
-            log.warn("Failed to enrich review order info: orderId={}", orderId, ex);
+        OrderDTO order = orderQueryService.getOrder(orderId);
+        if (order != null) {
+            vo.setServiceItemName(order.getServiceItemName());
+            vo.setSpecName(order.getSpecName());
         }
     }
 
     private String maskUser(Long userId) {
         if (userId == null) {
-            return "用户";
+            return "user";
         }
         String value = String.valueOf(userId);
-        return "用户" + value.substring(Math.max(0, value.length() - 4));
+        return "user" + value.substring(Math.max(0, value.length() - 4));
     }
 
     private String trimToNull(String value) {

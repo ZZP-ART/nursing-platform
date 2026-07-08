@@ -16,6 +16,12 @@
      nacos:
        discovery:
          server-addr: localhost:8848
+     openfeign:
+       client:
+         config:
+           default:
+             connect-timeout: 5000
+             read-timeout: 5000
    kafka:
      bootstrap-servers: localhost:9092
      consumer:

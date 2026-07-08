@@ -7,9 +7,7 @@ import com.nursing.common.constant.ApiCode;
 import com.nursing.common.constant.OrderStatus;
 import com.nursing.common.dto.OrderDTO;
 import com.nursing.common.exception.BusinessException;
-import com.nursing.common.feign.OrderFeignClient;
 import com.nursing.common.result.PageResult;
-import com.nursing.common.result.Result;
 import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.feedback.dto.request.SubmitComplaintRequest;
 import com.nursing.feedback.dto.response.ComplaintSubmitResponse;
@@ -18,6 +16,7 @@ import com.nursing.feedback.dto.response.ComplaintTrackVO;
 import com.nursing.feedback.dto.response.ComplaintVO;
 import com.nursing.feedback.entity.Complaint;
 import com.nursing.feedback.entity.ComplaintTrack;
+import com.nursing.feedback.integration.OrderQueryService;
 import com.nursing.feedback.repository.ComplaintMapper;
 import com.nursing.feedback.repository.ComplaintTrackMapper;
 import java.time.LocalDateTime;
@@ -42,18 +41,18 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
 
     private final ComplaintMapper complaintMapper;
     private final ComplaintTrackMapper complaintTrackMapper;
-    private final OrderFeignClient orderFeignClient;
+    private final OrderQueryService orderQueryService;
     private final SnowflakeIdWorker snowflakeIdWorker;
     private final ObjectMapper objectMapper;
 
     public ComplaintServiceImpl(ComplaintMapper complaintMapper,
                                 ComplaintTrackMapper complaintTrackMapper,
-                                OrderFeignClient orderFeignClient,
+                                OrderQueryService orderQueryService,
                                 SnowflakeIdWorker snowflakeIdWorker,
                                 ObjectMapper objectMapper) {
         this.complaintMapper = complaintMapper;
         this.complaintTrackMapper = complaintTrackMapper;
-        this.orderFeignClient = orderFeignClient;
+        this.orderQueryService = orderQueryService;
         this.snowflakeIdWorker = snowflakeIdWorker;
         this.objectMapper = objectMapper;
     }
@@ -97,8 +96,8 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
         ComplaintTrack track = new ComplaintTrack();
         track.setId(snowflakeIdWorker.nextId());
         track.setComplaintId(complaintId);
-        track.setOperator("系统");
-        track.setContent("已收到投诉，正在核实");
+        track.setOperator("system");
+        track.setContent("Complaint received");
         track.setIsDeleted(NOT_DELETED);
         track.setCreateTime(now);
         track.setUpdateTime(now);
@@ -122,11 +121,11 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
     @Override
     public ComplaintTrackListVO getComplaintTracks(Long complaintId, Long userId) {
         if (complaintId == null || complaintId <= 0) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "complaintId不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "complaintId is required");
         }
         Complaint complaint = complaintMapper.selectById(complaintId);
         if (complaint == null) {
-            throw new BusinessException(ApiCode.COMPLAINT_NOT_FOUND, "投诉不存在");
+            throw new BusinessException(ApiCode.COMPLAINT_NOT_FOUND, "Complaint not found");
         }
         verifyComplaintOwner(complaint, userId);
         List<ComplaintTrackVO> tracks = complaintTrackMapper.selectByComplaintId(complaintId).stream()
@@ -142,45 +141,36 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
 
     private String requireIdempotentKey(String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey)) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is required");
         }
         String key = idempotentKey.trim();
         if (key.length() > 64) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key过长");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is too long");
         }
         return key;
     }
 
     private void requireComplaintOrder(Long orderId, Long userId) {
         if (orderId == null || orderId <= 0) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "orderId不能为空");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "orderId is required");
         }
-        OrderDTO order;
-        try {
-            Result<OrderDTO> result = orderFeignClient.getOrder(orderId);
-            if (result == null || result.getCode() != ApiCode.SUCCESS || result.getData() == null) {
-                throw new BusinessException(ApiCode.NOT_FOUND, "订单不存在");
-            }
-            order = result.getData();
-        } catch (BusinessException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            log.warn("Failed to query order for complaint: orderId={}", orderId, ex);
-            throw new BusinessException(ApiCode.BIZ_ERROR, "订单服务暂不可用");
+        OrderDTO order = orderQueryService.getOrder(orderId);
+        if (order == null) {
+            throw new BusinessException(ApiCode.NOT_FOUND, "Order not found");
         }
         if (!Objects.equals(order.getUserId(), userId)) {
-            throw new BusinessException(ApiCode.FORBIDDEN, "无权操作该订单");
+            throw new BusinessException(ApiCode.FORBIDDEN, "No permission for this order");
         }
         Integer status = order.getStatus();
         if (!Integer.valueOf(OrderStatus.WAITING_SERVICE.getValue()).equals(status)
                 && !Integer.valueOf(OrderStatus.COMPLETED.getValue()).equals(status)) {
-            throw new BusinessException(ApiCode.BIZ_ERROR, "当前订单状态不可投诉");
+            throw new BusinessException(ApiCode.BIZ_ERROR, "Order status cannot be complained");
         }
     }
 
     private void verifyComplaintOwner(Complaint complaint, Long userId) {
         if (!Objects.equals(complaint.getUserId(), userId)) {
-            throw new BusinessException(ApiCode.COMPLAINT_NO_PERMISSION, "无权操作该投诉");
+            throw new BusinessException(ApiCode.COMPLAINT_NO_PERMISSION, "No permission for this complaint");
         }
     }
 
@@ -209,27 +199,27 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
 
     private String typeText(Integer type) {
         if (type == null) {
-            return "未知";
+            return "unknown";
         }
         return switch (type) {
-            case 1 -> "服务质量";
-            case 2 -> "服务态度";
-            case 3 -> "乱收费";
-            case 4 -> "其他";
-            default -> "未知";
+            case 1 -> "service_quality";
+            case 2 -> "service_attitude";
+            case 3 -> "overcharging";
+            case 4 -> "other";
+            default -> "unknown";
         };
     }
 
     private String statusText(Integer status) {
         if (status == null) {
-            return "未知";
+            return "unknown";
         }
         return switch (status) {
-            case 0 -> "待处理";
-            case 1 -> "处理中";
-            case 2 -> "已处理";
-            case 3 -> "已关闭";
-            default -> "未知";
+            case 0 -> "pending";
+            case 1 -> "processing";
+            case 2 -> "resolved";
+            case 3 -> "closed";
+            default -> "unknown";
         };
     }
 
@@ -247,7 +237,7 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
         try {
             return objectMapper.writeValueAsString(cleaned);
         } catch (JsonProcessingException ex) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "图片地址格式错误");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Invalid image urls");
         }
     }
 
