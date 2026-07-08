@@ -5,7 +5,9 @@ import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.user.constant.UserErrorCode;
 import com.nursing.user.dto.request.LoginRequest;
 import com.nursing.user.dto.request.RegisterRequest;
+import com.nursing.user.dto.request.UpdateUserProfileRequest;
 import com.nursing.user.dto.response.AuthResponse;
+import com.nursing.user.dto.response.ProfileUpdateResponse;
 import com.nursing.user.dto.response.UserInfoResponse;
 import com.nursing.user.entity.User;
 import com.nursing.user.exception.UserBusinessException;
@@ -102,6 +104,39 @@ public class UserService {
         tokenService.invalidateToken(token);
     }
 
+    public UserInfoResponse getProfile(Long userId) {
+        User user = requireUser(userId);
+        return toProfileUserInfo(user);
+    }
+
+    @Transactional
+    public ProfileUpdateResponse updateProfile(Long userId, UpdateUserProfileRequest request) {
+        requireUser(userId);
+        if (StringUtils.hasText(request.getIdCard()) && !isValidIdCard(request.getIdCard())) {
+            throw new UserBusinessException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    UserErrorCode.ID_CARD_INVALID,
+                    "身份证号格式不正确");
+        }
+
+        User update = new User();
+        update.setId(userId);
+        update.setNickname(request.getNickname());
+        update.setAvatar(request.getAvatar());
+        update.setGender(request.getGender());
+        update.setIdCard(request.getIdCard());
+        update.setUpdateTime(LocalDateTime.now());
+        userMapper.updateById(update);
+
+        User updated = requireUser(userId);
+        ProfileUpdateResponse response = new ProfileUpdateResponse();
+        response.setUserId(updated.getId());
+        response.setNickname(updated.getNickname());
+        response.setAvatar(updated.getAvatar());
+        response.setGender(updated.getGender());
+        return response;
+    }
+
     private void validatePasswordLogin(LoginRequest request, User user) {
         if (!StringUtils.hasText(request.getPassword())) {
             throw paramError("密码不能为空");
@@ -150,6 +185,23 @@ public class UserService {
         return response;
     }
 
+    private UserInfoResponse toProfileUserInfo(User user) {
+        UserInfoResponse response = toAuthUserInfo(user);
+        response.setIdCard(maskIdCard(user.getIdCard()));
+        response.setLastLoginTime(user.getLastLoginTime());
+        response.setCreateTime(user.getCreateTime());
+        return response;
+    }
+
+    private User requireUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new UserBusinessException(HttpStatus.UNAUTHORIZED, ApiCode.UNAUTHORIZED, "未授权，请先登录");
+        }
+        ensureEnabled(user);
+        return user;
+    }
+
     private String defaultNickname(RegisterRequest request) {
         if (StringUtils.hasText(request.getNickname())) {
             return request.getNickname();
@@ -163,6 +215,26 @@ public class UserService {
             return phone;
         }
         return phone.substring(0, 3) + "****" + phone.substring(7);
+    }
+
+    private String maskIdCard(String idCard) {
+        if (!StringUtils.hasText(idCard) || idCard.length() < 8) {
+            return idCard;
+        }
+        return idCard.substring(0, 3) + "***********" + idCard.substring(idCard.length() - 4);
+    }
+
+    private boolean isValidIdCard(String idCard) {
+        if (!idCard.matches("^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[0-9Xx]$")) {
+            return false;
+        }
+        int[] weights = {7, 9, 10, 5, 8, 4, 2, 1, 6, 3, 7, 9, 10, 5, 8, 4, 2};
+        char[] checks = {'1', '0', 'X', '9', '8', '7', '6', '5', '4', '3', '2'};
+        int sum = 0;
+        for (int i = 0; i < weights.length; i++) {
+            sum += (idCard.charAt(i) - '0') * weights[i];
+        }
+        return Character.toUpperCase(idCard.charAt(17)) == checks[sum % 11];
     }
 
     private UserBusinessException paramError(String message) {
