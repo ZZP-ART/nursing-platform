@@ -3,9 +3,14 @@ package com.nursing.order.controller;
 import com.nursing.common.constant.ApiCode;
 import com.nursing.common.exception.BusinessException;
 import com.nursing.common.result.Result;
+import com.nursing.order.dto.request.OrderCreateRequest;
+import com.nursing.order.dto.response.OrderCreateResponse;
 import com.nursing.order.dto.response.PrepayTokenResponse;
+import com.nursing.order.service.IOrderService;
 import com.nursing.order.service.IdempotentService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -14,9 +19,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/orders")
 public class OrderController {
     private final IdempotentService idempotentService;
+    private final IOrderService orderService;
 
-    public OrderController(IdempotentService idempotentService) {
+    public OrderController(IdempotentService idempotentService, IOrderService orderService) {
         this.idempotentService = idempotentService;
+        this.orderService = orderService;
     }
 
     @PostMapping("/prepay-token")
@@ -24,6 +31,14 @@ public class OrderController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId) {
         requireUserId(userId);
         return Result.success(idempotentService.issuePrepayToken());
+    }
+
+    @PostMapping
+    public Result<OrderCreateResponse> create(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "Idempotent-Key", required = false) String idempotentKey,
+            @Valid @RequestBody OrderCreateRequest request) {
+        return Result.success(orderService.createOrder(requireUserId(userId), idempotentKey, request));
     }
 
     private Long requireUserId(Long userId) {
