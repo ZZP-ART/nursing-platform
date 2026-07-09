@@ -43,7 +43,7 @@ class CategoryServiceTest {
         category.setId(id);
         category.setParentId(parentId);
         category.setName(name);
-        category.setIcon("https://via.placeholder.com/48");
+        category.setIcon("/assets/default-category-icon.png");
         category.setSortOrder(sortOrder);
         category.setStatus(1);
         return category;

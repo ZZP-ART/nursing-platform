@@ -11,6 +11,8 @@ import com.nursing.feedback.dto.response.ComplaintVO;
 import com.nursing.feedback.service.ComplaintService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -25,9 +27,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/complaints")
 public class ComplaintController {
     private final ComplaintService complaintService;
+    private final String gatewayToken;
 
-    public ComplaintController(ComplaintService complaintService) {
+    public ComplaintController(ComplaintService complaintService,
+                               @Value("${nursing.gateway.trusted-token:}") String gatewayToken) {
         this.complaintService = complaintService;
+        this.gatewayToken = gatewayToken;
     }
 
     @PostMapping
@@ -57,7 +62,8 @@ public class ComplaintController {
     }
 
     private Long currentUserId(HttpServletRequest request) {
-        String userId = firstTextHeader(request, "X-User-Id", "X-UserId", "userId");
+        requireTrustedGateway(request.getHeader("X-Gateway-Token"));
+        String userId = firstTextHeader(request, "X-User-Id");
         if (!StringUtils.hasText(userId)) {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "未获取到登录用户");
         }
@@ -65,6 +71,12 @@ public class ComplaintController {
             return Long.valueOf(userId);
         } catch (NumberFormatException ex) {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "登录用户无效");
+        }
+    }
+
+    private void requireTrustedGateway(String trustedToken) {
+        if (!StringUtils.hasText(gatewayToken) || !gatewayToken.equals(trustedToken)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "Forbidden", HttpStatus.FORBIDDEN);
         }
     }
 

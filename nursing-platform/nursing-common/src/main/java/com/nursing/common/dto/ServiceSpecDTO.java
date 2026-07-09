@@ -1,9 +1,12 @@
 package com.nursing.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
+
 import java.io.Serializable;
 import java.math.BigDecimal;
 
 public class ServiceSpecDTO implements Serializable {
+    @JsonAlias("specId")
     private Long id;
     private Long serviceItemId;
     private String name;

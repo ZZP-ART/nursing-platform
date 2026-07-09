@@ -9,4 +9,6 @@ import java.util.List;
 @Mapper
 public interface ServiceSpecMapper {
     List<SpecVO> selectByItemId(@Param("serviceItemId") Long serviceItemId);
+
+    List<SpecVO> selectByItemIds(@Param("serviceItemIds") List<Long> serviceItemIds);
 }

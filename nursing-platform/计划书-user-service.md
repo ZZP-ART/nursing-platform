@@ -1,30 +1,32 @@
-﻿# nursing-user-service 寮€鍙戣鍒掍功
+# nursing-user-service 开发计划书
 
-> **鐗堟湰**锛歷1.0  
-> **鏃ユ湡**锛?026-07-08  
-> **瀵瑰簲鍒嗘敮**锛歚codex/user-service`  
-> **闆嗘垚鐩爣**锛歴quash merge 鈫?`develop`
+> **版本**：v1.0
+> **日期**：2026-07-08
+> **对应分支**：`codex/user-service`
+> **集成目标**：squash merge 回 `develop`
 
 ---
 
-## 涓€銆佹帴鍙ｆ竻鍗曚笌瀹炵幇椤哄簭
+## 一、接口清单与实现顺序
 
-| 搴忓彿 | 鏂规硶 | 璺緞 | 璇存槑 | 閴存潈 | 鍓嶇疆渚濊禆 |
+| 序号 | 方法 | 路径 | 说明 | 鉴权 | 前置依赖 |
 |------|------|------|------|------|---------|
-| 1 | POST | /api/v1/users/sms-code | 鍙戦€侀獙璇佺爜 | 鍏?| 鏃?|
-| 2 | POST | /api/v1/users/register | 娉ㄥ唽锛堟墜鏈哄彿+楠岃瘉鐮?瀵嗙爜锛?| 鍏?| 鎺ュ彛 1 |
-| 3 | POST | /api/v1/users/login | 鐧诲綍锛堝瘑鐮佹垨楠岃瘉鐮佷袱绉嶆ā寮忥級 | 鍏?| 鏃?|
-| 4 | GET | /api/v1/users/profile | 鑾峰彇褰撳墠鐢ㄦ埛淇℃伅 | 闇€ | 鎺ュ彛 2/3 绛惧彂 Token |
-| 5 | PATCH | /api/v1/users/profile | 鏇存柊涓汉淇℃伅 | 闇€ | 鎺ュ彛 2/3 绛惧彂 Token |
-| 6 | POST | /api/v1/users/logout | 鐧诲嚭锛圱oken 鍏?Redis 榛戝悕鍗曪級 | 闇€ | 鎺ュ彛 2/3 绛惧彂 Token |
+| 1 | POST | `/api/v1/users/sms-code` | 发送验证码 | 否 | 无 |
+| 2 | POST | `/api/v1/users/register` | 注册（手机号 + 验证码 + 密码） | 否 | 接口 1 |
+| 3 | POST | `/api/v1/users/login` | 登录（密码或验证码两种模式） | 否 | 无 |
+| 4 | GET | `/api/v1/users/profile` | 获取当前用户信息 | 是 | 接口 2/3 签发 Token |
+| 5 | PATCH | `/api/v1/users/profile` | 更新个人信息 | 是 | 接口 2/3 签发 Token |
+| 6 | POST | `/api/v1/users/logout` | 登出（Token 进入 Redis 黑名单） | 是 | 接口 2/3 签发 Token |
+| 7 | POST | `/api/v1/users/password/reset` | 重置密码 | 否 | 接口 1 |
+| 8 | POST | `/api/v1/files/upload` | 文件上传 | 是 | 接口 2/3 签发 Token |
 
-**瀹炵幇椤哄簭璇存槑**锛氭寜 1鈫?鈫?鈫?鈫?鈫? 鎵ц銆傞獙璇佺爜鏃犱緷璧栧厛琛岋紝娉ㄥ唽/鐧诲綍鏄涓€閬撻棬锛岀櫥鍑哄拰鐢ㄦ埛淇℃伅鏌ヨ/淇敼鍦?Token 绯荤粺灏辩华鍚庨『鐞嗘垚绔犮€?
+**实现顺序说明**：按 `1 → 2 → 3 → 4 → 5 → 6` 优先完成认证主链路；重置密码和文件上传可在主链路稳定后补齐。
 
 ---
 
-## 浜屻€丮aven 渚濊禆澧炶ˉ
+## 二、Maven 依赖增补
 
-褰撳墠 `nursing-user-service/pom.xml` 缂哄皯 JWT 鍜?BCrypt 鐩稿叧渚濊禆锛岄渶杩藉姞锛?
+当前 `nursing-user-service/pom.xml` 需要确保以下依赖齐备：
 
 ```xml
 <!-- JWT -->
@@ -42,17 +44,20 @@
     <artifactId>jjwt-jackson</artifactId>
     <scope>runtime</scope>
 </dependency>
-<!-- Hutool 宸ュ叿闆嗭紙宸插湪鐖?POM 绠＄悊鐗堟湰锛?-->
+
+<!-- Hutool -->
 <dependency>
     <groupId>cn.hutool</groupId>
     <artifactId>hutool-all</artifactId>
 </dependency>
-<!-- Spring Security Crypto锛堜粎寮曞叆 BCrypt锛?-->
+
+<!-- BCrypt -->
 <dependency>
     <groupId>org.springframework.security</groupId>
     <artifactId>spring-security-crypto</artifactId>
 </dependency>
-<!-- Spring Boot Starter Validation锛堝弬鏁版牎楠屾敞瑙ｏ級 -->
+
+<!-- Validation -->
 <dependency>
     <groupId>org.springframework.boot</groupId>
     <artifactId>spring-boot-starter-validation</artifactId>
@@ -61,234 +66,255 @@
 
 ---
 
-## 涓夈€佸垎灞傝璁?
+## 三、分层设计
 
-```
+```text
 src/main/java/com/nursing/user/
-|-- UserApplication.java                     # 鍚姩绫?
+|-- UserApplication.java
 |-- controller/
-|   |-- SmsController.java                   # POST /api/v1/users/sms-code
-|   +-- UserController.java                  # 娉ㄥ唽/鐧诲綍/鐧诲嚭/me
+|   |-- SmsController.java
+|   |-- UserController.java
+|   +-- FileController.java
 |-- service/
-|   |-- SmsService.java                      # 楠岃瘉鐮佺敓鎴愩€佸彂閫併€佹牎楠?
-|   |-- UserService.java                     # 娉ㄥ唽/鐧诲綍/鏌ヨ/鏇存柊
-|   +-- TokenService.java                    # JWT 绛惧彂銆佹牎楠屻€侀粦鍚嶅崟绠＄悊
+|   |-- SmsService.java
+|   |-- UserService.java
+|   |-- TokenService.java
+|   +-- FileStorageService.java
 |-- mapper/
-|   |-- UserMapper.java                      # 鐢ㄦ埛琛?CRUD
-|   |-- UserTokenMapper.java                 # Token 鎸佷箙鍖栬褰?
-|   +-- SmsRecordMapper.java                 # 鐭俊璁板綍瀹¤
+|   |-- UserMapper.java
+|   |-- UserTokenMapper.java
+|   +-- SmsRecordMapper.java
 |-- entity/
-|   |-- User.java                            # 鏄犲皠 user 琛?
-|   |-- UserToken.java                       # 鏄犲皠 user_token 琛?
-|   +-- SmsRecord.java                       # 鏄犲皠 sms_record 琛?
+|   |-- User.java
+|   |-- UserToken.java
+|   +-- SmsRecord.java
 |-- dto/
 |   |-- request/
-|   |   |-- SmsCodeRequest.java              # phone + smsType
-|   |   |-- RegisterRequest.java             # phone + smsCode + password + nickname(opt)
-|   |   |-- LoginRequest.java                # phone + loginMode + password/smsCode
-|   |   +-- UpdateUserRequest.java           # nickname + gender + avatar
+|   |   |-- SmsCodeRequest.java
+|   |   |-- RegisterRequest.java
+|   |   |-- LoginRequest.java
+|   |   |-- ResetPasswordRequest.java
+|   |   +-- UpdateUserProfileRequest.java
 |   +-- response/
-|       |-- SmsCodeResponse.java             # expireSeconds
-|       |-- LoginResponse.java               # token + expireTime + user
-|       +-- UserInfoResponse.java            # 鑴辨晱鐢ㄦ埛淇℃伅
+|       |-- SmsCodeResponse.java
+|       |-- AuthResponse.java
+|       |-- UserInfoResponse.java
+|       |-- ProfileUpdateResponse.java
+|       +-- FileUploadResponse.java
 |-- config/
-|   |-- JwtConfig.java                       # 璇诲彇 jwt.secret/expire 閰嶇疆
-|   |-- RedisConfig.java                     # RedisTemplate Bean
-|   +-- SnowflakeConfig.java                 # SnowflakeIdWorker Bean
-+-- interceptor/
-    +-- UserTokenInterceptor.java            # 浠?Header 鎻愬彇 userId
+|   |-- JwtProperties.java
+|   |-- JwtSecurityValidator.java
+|   |-- RedisConfig.java
+|   |-- SmsProperties.java
+|   |-- FileStorageProperties.java
+|   |-- UserServiceConfig.java
+|   +-- WebMvcConfig.java
+|-- interceptor/
+|   +-- UserTokenInterceptor.java
+|-- security/
+|   |-- SensitiveLoggingFilter.java
+|   +-- IdCardCrypto.java
+|-- constant/
+|   +-- UserErrorCode.java
++-- exception/
+    |-- UserBusinessException.java
+    +-- UserExceptionHandler.java
 ```
 
-### 3.1 Controller 灞傝鍒?
+### 3.1 Controller 层规则
 
-| Controller | API | 璇锋眰浣?鍙傛暟 |
-|-----------|-----|------------|
-| **SmsController** | `POST /api/v1/users/sms-code` | `@RequestBody @Valid SmsCodeRequest` |
-| **UserController** | `POST /api/v1/users/register` | `@RequestBody @Valid RegisterRequest` |
-| **UserController** | `POST /api/v1/users/login` | `@RequestBody @Valid LoginRequest` |
-| **UserController** | `GET /api/v1/users/profile` | `@RequestAttribute("userId")` |
-| **UserController** | `PATCH /api/v1/users/profile` | `@RequestAttribute("userId")` + `@RequestBody @Valid UpdateUserRequest` |
-| **UserController** | `POST /api/v1/users/logout` | `@RequestHeader("Authorization")` |
-| **UserController** | `POST /api/v1/users/password/reset` | `@RequestBody @Valid Phone + smsCode + newPassword` |
-| **UserController** | `POST /api/v1/files/upload` | `@RequestParam("file") MultipartFile` |
+| Controller | API | 请求体 / 参数 |
+|-----------|-----|--------------|
+| `SmsController` | `POST /api/v1/users/sms-code` | `@RequestBody @Valid SmsCodeRequest` |
+| `UserController` | `POST /api/v1/users/register` | `@RequestBody @Valid RegisterRequest` |
+| `UserController` | `POST /api/v1/users/login` | `@RequestBody @Valid LoginRequest` |
+| `UserController` | `GET /api/v1/users/profile` | `@RequestAttribute("userId")` |
+| `UserController` | `PATCH /api/v1/users/profile` | `@RequestAttribute("userId")` + `@RequestBody @Valid UpdateUserProfileRequest` |
+| `UserController` | `POST /api/v1/users/logout` | `@RequestHeader("Authorization")` |
+| `UserController` | `POST /api/v1/users/password/reset` | `@RequestBody @Valid ResetPasswordRequest` |
+| `FileController` | `POST /api/v1/files/upload` | `@RequestParam("file") MultipartFile` |
 
-> **閴存潈绛栫暐**锛氬湪 Gateway 灞傛湭瀹屾暣灏辩华鍓嶏紝user-service 鍐呴€氳繃 `UserTokenInterceptor` 鎷︽埅闇€閴存潈鐨勮矾寰勶紝浠?`Authorization` 澶磋В鏋?Token 鍚庢敞鍏?`userId` 鍒拌姹傚睘鎬с€傚叕寮€璺緞鐩存帴鏀捐銆傚悗鏈?Gateway JWT Filter 灏辩华鍚庡彲绉婚櫎璇ユ嫤鎴櫒銆?
+> **鉴权策略**：在 Gateway 层未完全收口前，user-service 内通过 `UserTokenInterceptor` 拦截需鉴权路径，从 `Authorization` 头解析 Token 并注入 `userId`。待 Gateway JWT Filter 稳定后，可逐步收敛为网关统一鉴权。
 
-### 3.2 Service 灞傝亴璐?
+### 3.2 Service 层职责
 
-| Service | 鏍稿績鏂规硶 | 璇存槑 |
+| Service | 核心方法 | 说明 |
 |---------|---------|------|
-| **SmsService** | `sendSmsCode(phone, smsType)` | 鐢熸垚6浣嶆暟瀛楅獙璇佺爜 鈫?棰戠巼鏍￠獙(60s/5娆?鏃? 鈫?瀛楻edis(5min) 鈫?璁板綍sms_record 鈫?Mock鍙戦€?|
-| **SmsService** | `verifySmsCode(phone, smsCode, smsType)` | 浠嶳edis鍙栭獙璇佺爜鏍″ 鈫?鎴愬姛鍚庡垹闄edis閿?|
-| **UserService** | `register(request)` | 鏍￠獙楠岃瘉鐮?鈫?鏌ラ噸 鈫?BCrypt鍔犲瘑瀵嗙爜 鈫?鎻掑叆user 鈫?绛惧彂Token 鈫?杩斿洖鐧诲綍鎬?|
-| **UserService** | `login(request)` | 鏌ョ敤鎴?鈫?瀵嗙爜妯″紡楠岃瘉瀵嗙爜/sms妯″紡鏍￠獙楠岃瘉鐮?鈫?妫€鏌ョ姸鎬?鈫?绛惧彂Token 鈫?鏇存柊last_login_time |
-| **UserService** | `getCurrentUser(userId)` | 鎸塈D鏌ョ敤鎴?鈫?瀛楁鑴辨晱(鎵嬫満鍙蜂腑闂?浣?) 鈫?杩斿洖 |
-| **UserService** | `updateUser(userId, request)` | 鏍￠獙 鈫?閮ㄥ垎鏇存柊鍙敼瀛楁 鈫?杩斿洖 |
-| **TokenService** | `generateToken(user)` | 鍒涘缓JWT(鍚玼serId/phone/exp) 鈫?瀛楻edis 鈫?璁板綍user_token琛?|
-| **TokenService** | `validateToken(token)` | 瑙ｆ瀽JWT 鈫?鏌edis榛戝悕鍗?鈫?杩斿洖userId |
-| **TokenService** | `invalidateToken(token)` | 灏員oken鍔犲叆Redis榛戝悕鍗?TTL鍚孴oken鍓╀綑鏈夋晥鏈? |
+| `SmsService` | `sendSmsCode(phone, smsType)` | 生成 6 位验证码、做频率限制、写 Redis、落库审计、支持 Mock 发送 |
+| `SmsService` | `verifySmsCode(phone, smsCode, smsType)` | 从 Redis 校验验证码，成功后删除 |
+| `UserService` | `register(request)` | 校验验证码、手机号查重、BCrypt 加密密码、落库、签发 Token |
+| `UserService` | `login(request)` | 支持密码模式和短信模式，登录成功后更新 `lastLoginTime` |
+| `UserService` | `getCurrentUser(userId)` | 查询当前用户并返回脱敏信息 |
+| `UserService` | `updateUser(userId, request)` | 更新昵称、性别、头像等资料 |
+| `UserService` | `resetPassword(request)` | 校验验证码后重置密码 |
+| `TokenService` | `generateToken(user)` | 生成 JWT，写 Redis，记录 `user_token` |
+| `TokenService` | `validateToken(token)` | 解析 JWT，检查黑名单，返回 userId |
+| `TokenService` | `invalidateToken(token)` | 将 Token 加入 Redis 黑名单，TTL 与剩余有效期一致 |
+| `FileStorageService` | `store(file, userId)` | 校验文件并写入存储目录，返回可访问地址 |
 
-### 3.3 Mapper 灞傦紙MyBatis XML锛?
+### 3.3 Mapper 层（MyBatis XML）
 
-| Mapper | 涓昏鎿嶄綔 | SQL 璇存槑 |
+| Mapper | 主要操作 | SQL 说明 |
 |--------|---------|---------|
-| **UserMapper** | insert/selectById/selectByPhone/updateById | 绠€鍗?CRUD锛岄€昏緫鍒犻櫎杩囨护 |
-| **UserTokenMapper** | insert/selectByUserId | Token 鎸佷箙鍖栬褰?|
-| **SmsRecordMapper** | insert/selectCountByPhoneToday | 鐭俊鏃ュ彂閫佹鏁扮粺璁?|
+| `UserMapper` | insert / selectById / selectByPhone / updateById | 用户基础 CRUD，过滤逻辑删除 |
+| `UserTokenMapper` | insert / selectByUserId | Token 持久化与审计记录 |
+| `SmsRecordMapper` | insert / selectCountByPhoneToday | 短信发送记录与日限统计 |
 
-### 3.4 Entity 鏄犲皠
+### 3.4 Entity 映射
 
-> **ID 绛栫暐**锛氭墍鏈?Entity 鍧囦娇鐢?`SnowflakeIdWorker` 鍦?Service 灞傜敓鎴愬垎甯冨紡 ID锛屼富閿被鍨嬩负 `Long`锛屼笉渚濊禆鏁版嵁搴撹嚜澧炪€?
+> **ID 策略**：所有实体统一使用 `SnowflakeIdWorker` 在 Service 层生成分布式 ID，主键类型为 `Long`，不依赖数据库自增。
 
-**User** 瀵瑰簲 `user` 琛細
+**User** 对应 `user` 表：
 - id, phone, password, nickname, avatar, gender, idCard, status, lastLoginTime, registerIp, isDeleted, createTime, updateTime
 
-**UserToken** 瀵瑰簲 `user_token` 琛細
+**UserToken** 对应 `user_token` 表：
 - id, userId, token, expireTime, isDeleted, createTime
 
-**SmsRecord** 瀵瑰簲 `sms_record` 琛細
+**SmsRecord** 对应 `sms_record` 表：
 - id, phone, smsType, code, status, sendTime, expireTime, createTime
 
 ---
 
-## 鍥涖€佸叧閿疄鐜扮粏鑺?
+## 四、关键实现细节
 
-### 4.1 JWT 绛惧彂涓庢牎楠?
+### 4.1 JWT 签发与校验
 
-- **绠楁硶**锛欻MAC-SHA256锛坖jwt 0.12.6 鍘熺敓鏀寔锛?
-- **瀵嗛挜**锛氱粺涓€閫氳繃 Nacos 閰嶇疆涓績涓嬪彂锛坉ata-id: `nursing-jwt.yaml`锛夛紝user-service 涓?gateway 鍏变韩鍚屼竴瀵嗛挜锛屼笉纭紪鐮佸湪鏈湴閰嶇疆涓?
-- **杞借嵎**锛歚{ "userId": 10001, "phone": "138****5678" }`
-- **鏈夋晥鏈?*锛氶粯璁?7 澶╋紙`nursing.jwt.expire-seconds: 604800`锛?
-- **Token 瀛樺偍**锛?
-  - Redis锛歚user:token:{userId}` 鈫?`{token, expireTime}`锛岀敤浜庨粦鍚嶅崟鏍￠獙
-  - MySQL锛歚user_token` 琛ㄦ寔涔呭寲璁板綍锛堝璁＄敤锛?
-- **榛戝悕鍗曟満鍒?*锛氱櫥鍑烘椂浠?Token 鐨?jti 涓?key 鍐欏叆 Redis 榛戝悕鍗曪紝TTL = Token 鍓╀綑鏈夋晥鏈?
+- **算法**：HMAC-SHA256（jjwt 0.12.x 原生支持）
+- **密钥来源**：统一通过 Nacos 配置中心下发（`nursing-jwt.yaml`）
+- **载荷**：`userId`、`phone`、`exp` 等基础信息
+- **默认有效期**：7 天（`nursing.jwt.expire-seconds: 604800`）
+- **Token 存储**
+  - Redis：`user:token:{userId}`，用于在线状态和黑名单控制
+  - MySQL：`user_token` 审计记录
+- **黑名单机制**：登出时把 Token 标识写入 Redis，TTL 为剩余有效期
 
-### 4.2 楠岃瘉鐮佹祦绋?
+### 4.2 验证码流程
 
-1. 鏍￠獙鎵嬫満鍙锋牸寮忥紙11浣嶏紝1寮€澶达級
-2. 棰戠巼妫€鏌ワ細鍚屼竴鎵嬫満鍙?60 绉掑唴涓嶅彲閲嶅鍙戦€?鈫?鏌?Redis key `sms:rate:{phone}` 鏄惁瀛樺湪
-3. 鏃ラ檺妫€鏌ワ細鍚屼竴鎵嬫満鍙峰綋澶╂渶澶?5 娆?鈫?`SELECT COUNT(*) FROM sms_record WHERE phone=? AND DATE(send_time)=CURDATE()`
-4. smsType 涓氬姟鏍￠獙锛?
-   - `register` 鈫?鎵嬫満鍙蜂笉鑳藉凡娉ㄥ唽
-   - `login` / `reset_password` 鈫?鎵嬫満鍙峰繀椤诲凡娉ㄥ唽
-5. 鐢熸垚 6 浣嶇函鏁板瓧楠岃瘉鐮侊紙`String.format("%06d", random.nextInt(1000000))`锛?
-6. 瀛樺偍鍒?Redis锛歚sms:code:{smsType}:{phone}` 鈫?`{code}`锛孴TL 300 绉?
-7. 璁板綍 `sms_record`锛坰tatus=1锛宑ode 鏄庢枃瀛樺偍浠呯敤浜庡璁★級
-8. 褰撳墠涓?Mock 妯″紡锛坄nursing.sms.mock: true`锛夛紝浠呮棩蹇楁墦鍗帮紝涓嶇湡瀹炶皟鐢?SMS 閫氶亾
-9. 杩斿洖 `{ "expireSeconds": 300 }`
+1. 校验手机号格式（11 位，1 开头）
+2. 检查 60 秒频率限制：`sms:rate:{phone}`
+3. 检查每日发送上限：`sms_record`
+4. 根据 `smsType` 做业务校验
+   - `register`：手机号不能已注册
+   - `login` / `reset_password`：手机号必须已注册
+5. 生成 6 位纯数字验证码
+6. 写 Redis：`sms:code:{smsType}:{phone}`，TTL 300 秒
+7. 记录 `sms_record`
+8. 开发阶段可走 Mock 短信通道
+9. 返回 `expireSeconds=300`
 
-### 4.3 瀵嗙爜鍔犲瘑
+### 4.3 密码加密
 
-- 浣跨敤 `org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder`
-- 姣忔娉ㄥ唽鏃剁敓鎴愰殢鏈虹洂锛屽瘑鐮佸瓨鍌ㄤ负 BCrypt 鍝堝笇
-- 鐧诲綍鏃?`encoder.matches(rawPassword, encodedPassword)` 鏍￠獙
+- 使用 `BCryptPasswordEncoder`
+- 注册时生成随机盐并存储 BCrypt 哈希
+- 登录时通过 `matches` 比较原始密码和哈希密码
 
-### 4.4 鐧诲綍妯″紡
+### 4.4 登录模式
 
-鏀寔涓ょ鐧诲綍鏂瑰紡锛堢敱 `loginMode` 瀛楁鍖哄垎锛夛細
-
-| 妯″紡 | loginMode 鍊?| 鏍￠獙鏂瑰紡 |
+| 模式 | `loginMode` | 校验方式 |
 |------|-------------|---------|
-| 瀵嗙爜鐧诲綍 | `password` | 鏌?DB 鈫?BCrypt 鍖归厤瀵嗙爜 |
-| 鐭俊楠岃瘉鐮佺櫥褰?| `sms` | Redis 鍙栭獙璇佺爜瀵规瘮锛堝悓娉ㄥ唽鏍￠獙閫昏緫锛墊
+| 密码登录 | `password` | 查库后用 BCrypt 校验 |
+| 短信验证码登录 | `sms` | 走 Redis 验证码校验逻辑 |
 
-### 4.5 鐢ㄦ埛淇℃伅鑴辨晱
+### 4.5 用户信息脱敏
 
-杩斿洖鍓嶇鐨勭敤鎴峰璞′腑锛屾墜鏈哄彿涓棿鍥涗綅鏇挎崲涓?`*`锛?
+前端返回对象中的手机号中间四位需要替换为 `*`：
 
+```text
+13812345678 -> 138****5678
 ```
-13812345678 鈫?138****5678
-```
 
-### 4.6 璇锋眰楠岃瘉
+身份证等敏感信息统一通过加密组件处理，并由日志过滤器避免直接打印明文。
 
-浣跨敤 Jakarta Validation锛坄@Valid`锛夊仛鍙傛暟鏍￠獙锛?
-- 鎵嬫満鍙凤細`@Pattern(regexp = "^1\\\d{10}$")`
-- 瀵嗙爜锛歚@Size(min=8, max=32)` + 鑷畾涔夋牎楠屽瓧姣?鏁板瓧缁勫悎
-- 鏄电О锛歚@Size(min=2, max=16)`
-- 楠岃瘉鐮侊細`@Pattern(regexp = "^\\\d{6}$")`
+### 4.6 请求校验
 
-### 4.7 閿欒鐮侊紙User 鍩?2000-2999锛?
+使用 Jakarta Validation 做参数校验：
 
-| code | message | 瑙﹀彂鏉′欢 |
+- 手机号：`@Pattern(regexp = "^1\\d{10}$")`
+- 密码：`@Size(min = 8, max = 32)`，并要求字母 + 数字组合
+- 昵称：`@Size(min = 2, max = 16)`
+- 验证码：`@Pattern(regexp = "^\\d{6}$")`
+
+### 4.7 错误码（User 业务域 2000-2999）
+
+| code | message | 触发条件 |
 |------|---------|---------|
-| 2001 | 鍙戦€佽繃浜庨绻侊紝璇?60 绉掑悗閲嶈瘯 | 鍚屼竴鎵嬫満鍙?60s 鍐呴噸澶嶈姹?|
-| 2002 | 浠婃棩鍙戦€佹鏁板凡杈句笂闄?| 鍚屼竴鎵嬫満鍙锋瘡鏃ヨ秴杩?5 娆?|
-| 2003 | 鎵嬫満鍙峰凡琚敞鍐?| register 鏃舵墜鏈哄彿宸插瓨鍦?|
-| 2004 | 鎵嬫満鍙锋湭娉ㄥ唽 | login/reset 鏃舵墜鏈哄彿涓嶅瓨鍦?|
-| 2005 | 鐭俊鍙戦€佸け璐ワ紝璇风◢鍚庨噸璇?| SMS 閫氶亾寮傚父 |
-| 2006 | 楠岃瘉鐮侀敊璇?| 楠岃瘉鐮佷笉鍖归厤 |
-| 2007 | 楠岃瘉鐮佸凡杩囨湡 | 楠岃瘉鐮佽秴杩?5 鍒嗛挓鏈夋晥鏈?|
-| 2008 | 璇ユ墜鏈哄彿宸叉敞鍐?| 娉ㄥ唽鍐茬獊 |
-| 2009 | 瀵嗙爜涓嶇鍚堝畨鍏ㄨ姹?| 瀵嗙爜鏈寘鍚瓧姣嶅拰鏁板瓧鎴栭暱搴︿笉瓒?|
-| 2010 | 瀵嗙爜閿欒 | 瀵嗙爜涓嶅尮閰?|
-| 2011 | 璐﹀彿宸茶绂佺敤 | 鐢ㄦ埛 status=1 |
+| 2001 | 发送过于频繁，请 60 秒后重试 | 同一手机号 60 秒内重复请求 |
+| 2002 | 今日发送次数已达上限 | 同一手机号当日超过 5 次 |
+| 2003 | 手机号已被注册 | 注册时手机号已存在 |
+| 2004 | 手机号未注册 | 登录 / 重置密码时查不到用户 |
+| 2005 | 短信发送失败，请稍后重试 | 短信通道异常 |
+| 2006 | 验证码错误 | 验证码不匹配 |
+| 2007 | 验证码已过期 | 验证码超时 |
+| 2008 | 该手机号已注册 | 注册冲突 |
+| 2009 | 密码不符合安全要求 | 长度不足或未满足复杂度 |
+| 2010 | 密码错误 | 密码登录校验失败 |
+| 2011 | 账号已被禁用 | 用户状态异常 |
 
 ---
 
-## 浜斻€侀厤缃枃浠跺彉鏇?
+## 五、配置文件变更
 
-闇€鍦?`application.yml` 涓柊澧炰互涓嬮厤缃細
+需要在 `application.yml` 中补充如下配置：
 
 ```yaml
 nursing:
   jwt:
-    expire-seconds: 604800   # 7 澶╋紙瀵嗛挜 secret 鐢?Nacos 涓嬪彂锛?
+    expire-seconds: 604800
   sms:
-    mock: true               # 寮€鍙戦樁娈?Mock锛屼笉鐪熷疄鍙戠煭淇?
-    rate-limit-seconds: 60   # 鍙戦€侀鐜囬檺鍒?
-    daily-limit: 5           # 姣忔棩涓婇檺
+    mock: true
+    rate-limit-seconds: 60
+    daily-limit: 5
+  file-storage:
+    base-path: ./data/uploads
 ```
-> **Nacos 閰嶇疆**锛氬湪閰嶇疆涓績鍒涘缓 `nursing-jwt.yaml`锛屽寘鍚?`nursing.jwt.secret` 瀛楁锛寀ser-service 涓?gateway 鍏卞悓寮曠敤銆?
+
+> **Nacos 配置**：在配置中心创建 `nursing-jwt.yaml`，至少包含 `nursing.jwt.secret`。Gateway 与 user-service 共同引用。
 
 ---
 
-## 鍏€侀璁″伐浣滈噺
+## 六、预计工作量
 
-| 妯″潡 | 鏂囦欢鏁?| 棰勪及宸ユ椂 | 澶囨敞 |
+| 模块 | 文件数 | 预估工时 | 备注 |
 |------|-------|---------|------|
-| POM 渚濊禆澧炶ˉ | 1 | 0.5h | 杩藉姞 jjwt/security-crypto 渚濊禆 |
-| Entity 绫?| 3 | 1h | User / UserToken / SmsRecord |
-| Mapper 鎺ュ彛 + XML | 3 脳 2 | 2h | 姣忎釜 Mapper 鎺ュ彛 + 瀵瑰簲鐨?XML |
-| Service 灞?| 3 | 2.5h | SmsService / UserService / TokenService |
-| Controller + DTO | 4 + 5 | 2h | 2 涓?Controller锛? 涓?Request DTO锛? 涓?Response DTO |
-| Config + Interceptor | 3 | 1.5h | JwtConfig / RedisConfig / SnowflakeConfig / UserTokenInterceptor |
-| 鍚姩绫?+ application.yml 琛ュ厖 | 2 | 0.5h | 琛ュ厖 JWT 鍜?SMS 閰嶇疆 |
-| 鍗曞厓娴嬭瘯 | ~10 | 2h | 閲嶇偣瑕嗙洊 Service 灞?|
-| **鍚堣** | **~30 鏂囦欢** | **~12h** | 鍙湪涓€涓伐浣滄棩鍐呭畬鎴?|
+| POM 依赖增补 | 1 | 0.5h | 补齐 JWT / BCrypt / Validation |
+| Entity 类 | 3 | 1h | User / UserToken / SmsRecord |
+| Mapper 接口 + XML | 6 | 2h | 每个 Mapper 对应 XML |
+| Service 层 | 4 | 3h | 含 Token / 短信 / 用户 / 文件存储 |
+| Controller + DTO | 10+ | 2.5h | 注册、登录、资料、上传等 |
+| Config + Interceptor + Security | 7 | 2h | JWT、Redis、日志脱敏、文件存储 |
+| 单元测试 | ~10 | 2h | 重点覆盖 Service 层 |
+| **合计** | **约 30+ 文件** | **约 13h** | 可在 1 个工作日内完成 MVP |
 
-瀹為檯缂栫爜椤哄簭寤鸿锛?
-1. POM 渚濊禆 + 閰嶇疆锛堝熀纭€璁炬柦锛?
-2. Entity + Mapper锛堟暟鎹眰锛?
-3. Config 绫?+ TokenService锛圝WT 鍩虹璁炬柦锛?
-4. SmsService + SmsController锛堥獙璇佺爜锛?
-5. UserService + UserController锛堟敞鍐?鐧诲綍/鐢ㄦ埛淇℃伅锛?
-6. UserTokenInterceptor锛堥壌鏉冩嫤鎴級
-7. 鍗曞厓娴嬭瘯 + 闆嗘垚楠岃瘉
+建议编码顺序：
 
----
-
-## 涓冦€佹湭绾冲叆鏈鑼冨洿
-
-- **閲嶇疆瀵嗙爜** API锛圥OST /api/v1/users/password/reset锛夆€?涓嬩竴杩唬瀹炵幇
-- **鏂囦欢涓婁紶** API锛圥OST /api/v1/files/upload锛夆€?涓嬩竴杩唬瀹炵幇
-- **骞傜瓑璁板綍琛?*锛坕dempotent_record锛夊拰 **鏈湴娑堟伅琛?*锛坋vent_message锛夆€?鍚庣画璁㈠崟鏈嶅姟浣跨敤
-- **Kafka 闆嗘垚** 鈥?鐩墠 user-service 涓嶉渶瑕佸彂閫佸紓姝ヤ簨浠讹紝浣嗕繚鐣欎緷璧栫敤浜庡悗缁?
+1. POM 依赖 + 配置
+2. Entity + Mapper
+3. JWT / Redis / Snowflake 基础设施
+4. SmsService + SmsController
+5. UserService + UserController
+6. FileStorageService + FileController
+7. 单元测试 + 集成验证
 
 ---
 
-## 鍏€佸凡纭鐨勮璁″喅绛?
+## 七、未纳入本次范围
 
-浠ヤ笅涓轰笌璐熻矗浜烘矡閫氱‘璁ょ殑鍐崇瓥娓呭崟锛岀紪鐮侀樁娈典笉鍐嶅彉鏇达細
+- 更复杂的多端登录会话管理
+- 云对象存储接入（当前先走本地文件存储）
+- Kafka 事件链路（当前 user-service 不主动发异步业务事件）
+- 更细粒度的风控规则与审计报表
 
-| # | 鍐崇瓥椤?| 缁撹 | 渚濇嵁 |
+---
+
+## 八、已确认的设计决策
+
+| # | 决策项 | 结论 | 依据 |
 |---|-------|------|------|
-| 1 | API 璺緞椋庢牸 | 鎸?API 鎺ュ彛鏂囨。 | 涓庣郴缁熸灦鏋勬枃妗ｅ榻?|
-| 2 | HTTP 鏂规硶锛堟洿鏂拌祫鏂欙級 | PATCH | API 鎺ュ彛鏂囨。瑙勮寖 |
-| 3 | JWT 瀵嗛挜鏉ユ簮 | Nacos 閰嶇疆涓績锛坣ursing-jwt.yaml锛墊 渚夸簬 gateway 涓?service 鍏变韩锛岄伩鍏嶇‖缂栫爜 |
-| 4 | 閴存潈瀹炵幇 | 鏈嶅姟鍐?UserTokenInterceptor | Gateway 缁勪欢灏辩华鍓嶄繚闅滄帴鍙ｅ畨鍏?|
-| 5 | ID 鐢熸垚绛栫暐 | SnowflakeIdWorker 闆姳绠楁硶 | 棰勭暀鍒嗗簱鍒嗚〃鎵╁睍鑳藉姏 |
-| 6 | 鐧诲綍璇锋眰浣?| 缁熶竴 LoginRequest锛園Conditional 鏍￠獙锛?| 鍑忓皯 DTO 鏁伴噺锛岄€昏緫鍐呰仛 |
-| 7 | 鏇存柊璧勬枡瀛楁鑼冨洿 | nickname + gender + avatar 涓変釜瀛楁 | MVP 鏈€灏忛泦锛屾寜闇€鎵╁睍 |
-| 8 | 瀵嗙爜鏍￠獙鏂瑰紡 | @Pattern + @Size 姝ｅ垯鏍￠獙 | 绠€鍗曠洿鎺ワ紝鏃犻渶鑷畾涔夋敞瑙?|
+| 1 | API 路径风格 | 遵循 API 接口文档 | 与系统架构保持一致 |
+| 2 | 更新资料 HTTP 方法 | PATCH | 符合部分更新语义 |
+| 3 | JWT 密钥来源 | Nacos 配置中心 | 便于 Gateway 与服务共享 |
+| 4 | 鉴权实现 | 过渡期使用 `UserTokenInterceptor` | Gateway 未完全收口前保证接口可用 |
+| 5 | ID 生成策略 | SnowflakeIdWorker | 预留分库分表能力 |
+| 6 | 登录请求模型 | 统一 `LoginRequest` | 降低 DTO 数量，便于维护 |
+| 7 | 资料更新字段范围 | nickname / gender / avatar | MVP 最小集 |
+| 8 | 密码校验方式 | `@Pattern` + `@Size` | 规则清晰，易于前后端统一 |

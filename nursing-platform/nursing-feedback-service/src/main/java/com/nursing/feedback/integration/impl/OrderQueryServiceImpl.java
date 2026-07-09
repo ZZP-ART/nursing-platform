@@ -7,6 +7,7 @@ import com.nursing.common.result.Result;
 import com.nursing.feedback.integration.OrderQueryService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,15 +15,18 @@ public class OrderQueryServiceImpl implements OrderQueryService {
     private static final Logger log = LoggerFactory.getLogger(OrderQueryServiceImpl.class);
 
     private final OrderFeignClient orderFeignClient;
+    private final String internalToken;
 
-    public OrderQueryServiceImpl(OrderFeignClient orderFeignClient) {
+    public OrderQueryServiceImpl(OrderFeignClient orderFeignClient,
+                                 @Value("${nursing.internal.token:}") String internalToken) {
         this.orderFeignClient = orderFeignClient;
+        this.internalToken = internalToken;
     }
 
     @Override
     public OrderDTO getOrder(Long orderId) {
         try {
-            Result<OrderDTO> result = orderFeignClient.getOrder(orderId);
+            Result<OrderDTO> result = orderFeignClient.getOrder(orderId, internalToken);
             if (result == null || result.getCode() != ApiCode.SUCCESS) {
                 log.warn("Order query returned non-success response: orderId={}, code={}, message={}",
                         orderId, result == null ? null : result.getCode(), result == null ? null : result.getMessage());

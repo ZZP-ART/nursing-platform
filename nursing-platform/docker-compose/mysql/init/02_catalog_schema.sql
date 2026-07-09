@@ -50,15 +50,15 @@ CREATE TABLE IF NOT EXISTS service_category (
 -- 服务分类
  INSERT INTO service_category (id, parent_id, name, icon, sort_order, status)
 VALUES
-    (101, 0, '康复护理', 'https://via.placeholder.com/48', 1, 1),
-    (102, 0, '健康体检', 'https://via.placeholder.com/48', 2, 1),
-    (103, 0, '家政护理', 'https://via.placeholder.com/48', 3, 1),
-    (104, 0, '中医理疗', 'https://via.placeholder.com/48', 4, 1),
-    (111, 101, '术后康复', 'https://via.placeholder.com/48', 1, 1),
-    (112, 101, '老年康复', 'https://via.placeholder.com/48', 2, 1),
-    (121, 102, '上门体检', 'https://via.placeholder.com/48', 1, 1),
-    (131, 103, '居家照护', 'https://via.placeholder.com/48', 1, 1),
-    (141, 104, '推拿艾灸', 'https://via.placeholder.com/48', 1, 1);
+    (101, 0, '康复护理', NULL, 1, 1),
+    (102, 0, '健康体检', NULL, 2, 1),
+    (103, 0, '家政护理', NULL, 3, 1),
+    (104, 0, '中医理疗', NULL, 4, 1),
+    (111, 101, '术后康复', NULL, 1, 1),
+    (112, 101, '老年康复', NULL, 2, 1),
+    (121, 102, '上门体检', NULL, 1, 1),
+    (131, 103, '居家照护', NULL, 1, 1),
+    (141, 104, '推拿艾灸', NULL, 1, 1);
  
  -- 服务项目
  INSERT INTO service_item (id, category_id, name, description, status, sort_order)

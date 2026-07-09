@@ -1,90 +1,284 @@
- version: "3.9"
- 
- services:
-   mysql:
-     image: mysql:8.0
-     container_name: nursing-mysql
-     restart: unless-stopped
-     environment:
-       MYSQL_ROOT_PASSWORD: root123
-     ports:
-       - "3306:3306"
-     volumes:
-       - ./mysql/init:/docker-entrypoint-initdb.d
-       - mysql-data:/var/lib/mysql
-     healthcheck:
-       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-       interval: 10s
-       retries: 5
-       start_period: 30s
-     networks:
-       - nursing-net
- 
-   redis:
-     image: redis:7-alpine
-     container_name: nursing-redis
-     restart: unless-stopped
-     ports:
-       - "6379:6379"
-     volumes:
-       - redis-data:/data
-     healthcheck:
-       test: ["CMD", "redis-cli", "ping"]
-       interval: 10s
-       retries: 5
-     networks:
-       - nursing-net
- 
-   nacos:
-     image: nacos/nacos-server:v2.5.1
-     container_name: nursing-nacos
-     restart: unless-stopped
-     environment:
-       MODE: standalone
-       SPRING_DATASOURCE_PLATFORM: embedded
-     ports:
-       - "8848:8848"
-     healthcheck:
-       test: ["CMD", "curl", "-f", "http://localhost:8848/nacos/actuator/health"]
-       interval: 30s
-       retries: 3
-       start_period: 60s
-     networks:
-       - nursing-net
- 
-   zookeeper:
-     image: confluentinc/cp-zookeeper:7.7.2
-     container_name: nursing-zookeeper
-     restart: unless-stopped
-     environment:
-       ZOOKEEPER_CLIENT_PORT: 2181
-       ZOOKEEPER_TICK_TIME: 2000
-     ports:
-       - "2181:2181"
-     networks:
-       - nursing-net
- 
-   kafka:
-     image: confluentinc/cp-kafka:7.7.2
-     container_name: nursing-kafka
-     restart: unless-stopped
-     depends_on:
-       - zookeeper
-     environment:
-       KAFKA_BROKER_ID: 1
-       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
-       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
-       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-     ports:
-       - "9092:9092"
-     networks:
-       - nursing-net
- 
- volumes:
-   mysql-data:
-   redis-data:
- 
- networks:
-   nursing-net:
-     driver: bridge
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: nursing-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}
+    ports:
+      - "${NURSING_MYSQL_PORT:-13306}:3306"
+    volumes:
+      - ./mysql/init:/docker-entrypoint-initdb.d
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}"]
+      interval: 10s
+      retries: 10
+      start_period: 30s
+    networks:
+      - nursing-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: nursing-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 10
+    networks:
+      - nursing-net
+
+  nacos:
+    image: nacos/nacos-server:v2.5.1
+    container_name: nursing-nacos
+    restart: unless-stopped
+    environment:
+      MODE: standalone
+      SPRING_DATASOURCE_PLATFORM: mysql
+      MYSQL_SERVICE_HOST: mysql
+      MYSQL_SERVICE_PORT: 3306
+      MYSQL_SERVICE_DB_NAME: nacos_config
+      MYSQL_SERVICE_DB_PARAM: "characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true"
+      MYSQL_SERVICE_USER: ${NURSING_DB_USERNAME:-nursing}
+      MYSQL_SERVICE_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      JVM_XMS: 256m
+      JVM_XMX: 512m
+      JVM_XMN: 128m
+    ports:
+      - "8848:8848"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/actuator/health || exit 1"]
+      interval: 30s
+      retries: 10
+      start_period: 180s
+    networks:
+      - nursing-net
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.7.2
+    container_name: nursing-zookeeper
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - nursing-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.7.2
+    container_name: nursing-kafka
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "29092:29092"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1"]
+      interval: 15s
+      retries: 10
+      start_period: 40s
+    networks:
+      - nursing-net
+
+  gateway:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        MODULE: nursing-gateway
+    image: nursing/gateway:local
+    container_name: nursing-gateway
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_NACOS_ADDR: nacos:8848
+      NURSING_REDIS_HOST: redis
+      NURSING_JWT_SECRET: ${NURSING_JWT_SECRET:-dev-jwt-secret-for-nursing-platform-32bytes}
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
+      JAVA_OPTS: -Xms128m -Xmx256m
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+  user-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        MODULE: nursing-user-service
+    image: nursing/user-service:local
+    container_name: nursing-user-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_USER_DB_URL: jdbc:mysql://mysql:3306/user_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
+      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_REDIS_HOST: redis
+      NURSING_NACOS_ADDR: nacos:8848
+      NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NURSING_JWT_SECRET: ${NURSING_JWT_SECRET:-dev-jwt-secret-for-nursing-platform-32bytes}
+      NURSING_ID_CARD_ENCRYPTION_KEY: ${NURSING_ID_CARD_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef}
+      NURSING_FILE_PUBLIC_BASE_URL: http://localhost:8080/uploads
+      JAVA_OPTS: -Xms128m -Xmx256m
+    expose:
+      - "8081"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8081/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+  catalog-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        MODULE: nursing-catalog-service
+    image: nursing/catalog-service:local
+    container_name: nursing-catalog-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_CATALOG_DB_URL: jdbc:mysql://mysql:3306/catalog_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
+      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_REDIS_HOST: redis
+      NURSING_NACOS_ADDR: nacos:8848
+      JAVA_OPTS: -Xms128m -Xmx256m
+    expose:
+      - "8082"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8082/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+  order-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        MODULE: nursing-order-service
+    image: nursing/order-service:local
+    container_name: nursing-order-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_ORDER_DB_URL: jdbc:mysql://mysql:3306/order_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
+      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_REDIS_HOST: redis
+      NURSING_NACOS_ADDR: nacos:8848
+      NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
+      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:-dev-internal-token-for-nursing-platform}
+      NURSING_PAYMENT_MOCK: ${NURSING_PAYMENT_MOCK:-true}
+      JAVA_OPTS: -Xms128m -Xmx384m
+    expose:
+      - "8083"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8083/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+  feedback-service:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        MODULE: nursing-feedback-service
+    image: nursing/feedback-service:local
+    container_name: nursing-feedback-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_FEEDBACK_DB_URL: jdbc:mysql://mysql:3306/feedback_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
+      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
+      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_NACOS_ADDR: nacos:8848
+      NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
+      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:-dev-internal-token-for-nursing-platform}
+      JAVA_OPTS: -Xms128m -Xmx256m
+    expose:
+      - "8084"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8084/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+volumes:
+  mysql-data:
+  redis-data:
+
+networks:
+  nursing-net:
+    driver: bridge

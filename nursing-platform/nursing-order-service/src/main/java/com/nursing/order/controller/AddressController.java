@@ -7,6 +7,9 @@ import com.nursing.order.dto.request.AddressRequest;
 import com.nursing.order.dto.response.AddressResponse;
 import com.nursing.order.service.IAddressService;
 import jakarta.validation.constraints.Positive;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,20 +30,27 @@ import java.util.Map;
 @RequestMapping("/api/v1/addresses")
 public class AddressController {
     private final IAddressService addressService;
+    private final String gatewayToken;
 
-    public AddressController(IAddressService addressService) {
+    public AddressController(IAddressService addressService,
+                             @Value("${nursing.gateway.trusted-token:}") String gatewayToken) {
         this.addressService = addressService;
+        this.gatewayToken = gatewayToken;
     }
 
     @GetMapping
-    public Result<List<AddressResponse>> list(@RequestHeader(value = "X-User-Id", required = false) Long userId) {
+    public Result<List<AddressResponse>> list(@RequestHeader(value = "X-User-Id", required = false) Long userId,
+                                              @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken) {
+        requireTrustedGateway(trustedToken);
         return Result.success(addressService.listAddresses(requireUserId(userId)));
     }
 
     @PostMapping
     public Result<Map<String, Long>> create(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @Validated(AddressRequest.Create.class) @RequestBody AddressRequest request) {
+        requireTrustedGateway(trustedToken);
         Long addressId = addressService.createAddress(requireUserId(userId), request);
         return Result.success(Map.of("addressId", addressId));
     }
@@ -48,8 +58,10 @@ public class AddressController {
     @PatchMapping("/{id}")
     public Result<Void> update(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "地址ID必须大于0") Long id,
             @Validated(AddressRequest.Update.class) @RequestBody AddressRequest request) {
+        requireTrustedGateway(trustedToken);
         addressService.updateAddress(requireUserId(userId), id, request);
         return Result.success();
     }
@@ -57,7 +69,9 @@ public class AddressController {
     @DeleteMapping("/{id}")
     public Result<Void> delete(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "地址ID必须大于0") Long id) {
+        requireTrustedGateway(trustedToken);
         addressService.deleteAddress(requireUserId(userId), id);
         return Result.success();
     }
@@ -65,7 +79,9 @@ public class AddressController {
     @PutMapping("/{id}/default")
     public Result<Void> setDefault(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "地址ID必须大于0") Long id) {
+        requireTrustedGateway(trustedToken);
         addressService.setDefaultAddress(requireUserId(userId), id);
         return Result.success();
     }
@@ -75,5 +91,11 @@ public class AddressController {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "未登录或登录已过期");
         }
         return userId;
+    }
+
+    private void requireTrustedGateway(String trustedToken) {
+        if (!StringUtils.hasText(gatewayToken) || !gatewayToken.equals(trustedToken)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "Forbidden", HttpStatus.FORBIDDEN);
+        }
     }
 }

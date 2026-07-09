@@ -1,3 +1,25 @@
- logging:
-   level:
-     com.nursing: DEBUG
+logging:
+  level:
+    com.nursing: DEBUG
+
+spring:
+  datasource:
+    url: ${NURSING_FEEDBACK_DB_URL:jdbc:mysql://localhost:3306/feedback_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
+    username: ${NURSING_DB_USERNAME:root}
+    password: ${NURSING_DB_PASSWORD:nursing_dev_password_change_me}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NURSING_NACOS_ADDR:localhost:8848}
+  kafka:
+    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+mybatis:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+nursing:
+  gateway:
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:dev-gateway-token-for-nursing-platform}
+  internal:
+    token: ${NURSING_INTERNAL_TOKEN:dev-internal-token-for-nursing-platform}

@@ -5,6 +5,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
 import java.util.List;
+import java.time.LocalDateTime;
 
 @Mapper
 public interface OrderHeaderMapper {
@@ -37,4 +38,7 @@ public interface OrderHeaderMapper {
     int updateStatusByOrderNo(@Param("orderNo") String orderNo,
                               @Param("fromStatus") Integer fromStatus,
                               @Param("toStatus") Integer toStatus);
+
+    List<OrderHeader> selectExpiredPendingPayment(@Param("deadline") LocalDateTime deadline,
+                                                  @Param("limit") int limit);
 }

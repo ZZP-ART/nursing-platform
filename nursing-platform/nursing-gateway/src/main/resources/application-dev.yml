@@ -1,4 +1,18 @@
- logging:
-   level:
-     org.springframework.cloud.gateway: DEBUG
-     com.nursing: DEBUG
+logging:
+  level:
+    org.springframework.cloud.gateway: DEBUG
+    com.nursing: DEBUG
+
+nursing:
+  jwt:
+    secret: ${NURSING_JWT_SECRET:dev-jwt-secret-for-nursing-platform-32bytes}
+    gateway-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:dev-gateway-token-for-nursing-platform}
+
+spring:
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NURSING_NACOS_ADDR:localhost:8848}
+  data:
+    redis:
+      host: ${NURSING_REDIS_HOST:localhost}

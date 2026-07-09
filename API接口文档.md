@@ -1156,7 +1156,7 @@ getUserProfile().then(res => {
 
 | 接口标识 | updateUserProfile |
 
-| 请求方法 | PUT |
+| 请求方法 | PATCH |
 
 | URL 路径 | /api/v1/users/profile |
 

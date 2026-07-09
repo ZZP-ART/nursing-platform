@@ -56,4 +56,15 @@
         ORDER BY create_time DESC
         LIMIT 1
     </select>
+
+    <update id="markRefundedByOrderId">
+        UPDATE payment_record
+        SET pay_status = 2,
+            refund_time = NOW(),
+            update_time = NOW(),
+            version = version + 1
+        WHERE order_id = #{orderId}
+          AND pay_status = 1
+          AND is_deleted = 0
+    </update>
 </mapper>

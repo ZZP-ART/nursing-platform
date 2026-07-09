@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -71,9 +73,14 @@ public class ItemService {
     }
 
     private void attachSpecs(List<ItemPageVO> items) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        List<Long> itemIds = items.stream().map(ItemPageVO::getItemId).toList();
+        Map<Long, List<SpecVO>> specsByItemId = serviceSpecMapper.selectByItemIds(itemIds).stream()
+                .collect(Collectors.groupingBy(SpecVO::getServiceItemId));
         for (ItemPageVO item : items) {
-            List<SpecVO> specs = serviceSpecMapper.selectByItemId(item.getItemId());
-            item.setSpecs(specs);
+            item.setSpecs(specsByItemId.getOrDefault(item.getItemId(), List.of()));
         }
     }
 

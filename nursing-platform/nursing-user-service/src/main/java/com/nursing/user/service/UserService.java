@@ -13,6 +13,7 @@ import com.nursing.user.dto.response.UserInfoResponse;
 import com.nursing.user.entity.User;
 import com.nursing.user.exception.UserBusinessException;
 import com.nursing.user.mapper.UserMapper;
+import com.nursing.user.security.IdCardCrypto;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -35,17 +36,20 @@ public class UserService {
     private final TokenService tokenService;
     private final PasswordEncoder passwordEncoder;
     private final SnowflakeIdWorker snowflakeIdWorker;
+    private final IdCardCrypto idCardCrypto;
 
     public UserService(UserMapper userMapper,
                        SmsService smsService,
                        TokenService tokenService,
                        PasswordEncoder passwordEncoder,
-                       SnowflakeIdWorker snowflakeIdWorker) {
+                       SnowflakeIdWorker snowflakeIdWorker,
+                       IdCardCrypto idCardCrypto) {
         this.userMapper = userMapper;
         this.smsService = smsService;
         this.tokenService = tokenService;
         this.passwordEncoder = passwordEncoder;
         this.snowflakeIdWorker = snowflakeIdWorker;
+        this.idCardCrypto = idCardCrypto;
     }
 
     @Transactional
@@ -145,7 +149,7 @@ public class UserService {
         update.setNickname(request.getNickname());
         update.setAvatar(request.getAvatar());
         update.setGender(request.getGender());
-        update.setIdCard(request.getIdCard());
+        update.setIdCard(StringUtils.hasText(request.getIdCard()) ? idCardCrypto.encrypt(request.getIdCard()) : request.getIdCard());
         update.setUpdateTime(LocalDateTime.now());
         userMapper.updateById(update);
 
@@ -208,7 +212,7 @@ public class UserService {
 
     private UserInfoResponse toProfileUserInfo(User user) {
         UserInfoResponse response = toAuthUserInfo(user);
-        response.setIdCard(maskIdCard(user.getIdCard()));
+        response.setIdCard(maskIdCard(idCardCrypto.decryptIfNeeded(user.getIdCard())));
         response.setLastLoginTime(user.getLastLoginTime());
         response.setCreateTime(user.getCreateTime());
         return response;

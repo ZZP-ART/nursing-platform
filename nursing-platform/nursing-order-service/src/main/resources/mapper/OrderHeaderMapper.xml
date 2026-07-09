@@ -120,4 +120,14 @@
           AND status = #{fromStatus}
           AND is_deleted = 0
     </update>
+
+    <select id="selectExpiredPendingPayment" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE status = 0
+          AND is_deleted = 0
+          AND create_time &lt;= #{deadline}
+        ORDER BY create_time ASC
+        LIMIT #{limit}
+    </select>
 </mapper>

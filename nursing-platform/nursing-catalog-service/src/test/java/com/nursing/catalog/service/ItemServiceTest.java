@@ -22,6 +22,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,7 +46,7 @@ class ItemServiceTest {
         when(serviceCategoryMapper.selectVisibleById(101L)).thenReturn(new ServiceCategory());
         when(serviceItemMapper.selectPage(101L, 0, 20)).thenReturn(List.of(item));
         when(serviceItemMapper.count(101L)).thenReturn(1L);
-        when(serviceSpecMapper.selectByItemId(201L)).thenReturn(List.of(spec(301L)));
+        when(serviceSpecMapper.selectByItemIds(List.of(201L))).thenReturn(List.of(spec(201L, 301L)));
 
         PageResult<ItemPageVO> result = itemService.getItemPage(101L, 1, 20);
 
@@ -53,6 +54,8 @@ class ItemServiceTest {
         assertThat(result.getList()).hasSize(1);
         assertThat(result.getList().get(0).getSpecs()).hasSize(1);
         verify(serviceItemMapper).selectPage(101L, 0, 20);
+        verify(serviceSpecMapper).selectByItemIds(List.of(201L));
+        verify(serviceSpecMapper, never()).selectByItemId(201L);
     }
 
     @Test
@@ -82,19 +85,20 @@ class ItemServiceTest {
         ItemDetailVO detail = new ItemDetailVO();
         detail.setItemId(201L);
         detail.setName("上门康复推拿");
-        detail.setCoverImage("https://via.placeholder.com/600");
+        detail.setCoverImage("/assets/default-service-cover.png");
         when(serviceItemMapper.selectById(201L)).thenReturn(detail);
-        when(serviceSpecMapper.selectByItemId(201L)).thenReturn(List.of(spec(301L)));
+        when(serviceSpecMapper.selectByItemId(201L)).thenReturn(List.of(spec(201L, 301L)));
 
         ItemDetailVO result = itemService.getItemDetail(201L);
 
         assertThat(result.getSpecs()).hasSize(1);
-        assertThat(result.getImages()).containsExactly("https://via.placeholder.com/600");
+        assertThat(result.getImages()).containsExactly("/assets/default-service-cover.png");
     }
 
-    private SpecVO spec(Long id) {
+    private SpecVO spec(Long itemId, Long id) {
         SpecVO spec = new SpecVO();
         spec.setSpecId(id);
+        spec.setServiceItemId(itemId);
         spec.setName("单次体验");
         spec.setPrice(BigDecimal.valueOf(198.00));
         spec.setOriginalPrice(BigDecimal.valueOf(298.00));

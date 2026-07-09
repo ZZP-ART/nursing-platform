@@ -2,6 +2,7 @@ package com.nursing.order.service.impl;
 
 import com.nursing.common.dto.ServiceItemDTO;
 import com.nursing.common.dto.ServiceSpecDTO;
+import com.nursing.common.dto.OrderDTO;
 import com.nursing.common.exception.BusinessException;
 import com.nursing.common.feign.CatalogServiceFeignClient;
 import com.nursing.common.result.PageResult;
@@ -47,6 +48,7 @@ public class OrderServiceImpl implements IOrderService {
     private static final int ORDER_NOT_FOUND = 3007;
     private static final int ORDER_FORBIDDEN = 3008;
     private static final int ORDER_CANCEL_INVALID = 3009;
+    private static final int ORDER_PAY_INVALID = 3010;
 
     private final IdempotentService idempotentService;
     private final CatalogServiceFeignClient catalogServiceFeignClient;
@@ -136,6 +138,24 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
+    public OrderDTO getInternalOrder(Long orderId) {
+        OrderHeader order = orderHeaderMapper.selectById(orderId);
+        if (order == null) {
+            throw new BusinessException(ORDER_NOT_FOUND, "订单不存在");
+        }
+        OrderDTO dto = new OrderDTO();
+        dto.setOrderId(order.getId());
+        dto.setOrderNo(order.getOrderNo());
+        dto.setUserId(order.getUserId());
+        dto.setStatus(order.getStatus());
+        dto.setServiceItemId(order.getServiceItemId());
+        dto.setServiceItemName(order.getServiceItemName());
+        dto.setSpecName(order.getSpecName());
+        dto.setTotalAmount(order.getTotalAmount());
+        return dto;
+    }
+
+    @Override
     @Transactional
     public CancelResponse cancelOrder(Long userId, Long orderId, CancelOrderRequest request) {
         OrderHeader order = requireOwnedOrder(userId, orderId);
@@ -146,7 +166,8 @@ public class OrderServiceImpl implements IOrderService {
             throw new BusinessException(ORDER_CANCEL_INVALID, "当前状态不可取消");
         }
         String reason = request == null ? null : request.getCancelReason();
-        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), order.getStatus(), 3,
+        int toStatus = Integer.valueOf(1).equals(order.getStatus()) ? 4 : 3;
+        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), order.getStatus(), toStatus,
                 order.getVersion(), reason);
         if (updated == 0) {
             throw new BusinessException(ORDER_CANCEL_INVALID, "当前状态不可取消");
@@ -157,12 +178,66 @@ public class OrderServiceImpl implements IOrderService {
         log.setOrderNo(order.getOrderNo());
         log.setUserId(userId);
         log.setOperator("USER");
-        log.setAction("cancel");
+        log.setAction(Integer.valueOf(1).equals(order.getStatus()) ? "refund" : "cancel");
         log.setFromStatus(order.getStatus());
-        log.setToStatus(3);
+        log.setToStatus(toStatus);
         log.setRemark(reason);
         orderOperationLogMapper.insert(log);
-        return new CancelResponse(order.getId(), 3, Integer.valueOf(1).equals(order.getStatus()) ? "REFUNDING" : "NO_REFUND");
+        if (Integer.valueOf(1).equals(order.getStatus())) {
+            paymentRecordMapper.markRefundedByOrderId(order.getId());
+        }
+        return new CancelResponse(order.getId(), toStatus, Integer.valueOf(1).equals(order.getStatus()) ? "REFUNDING" : "NO_REFUND");
+    }
+
+    @Override
+    @Transactional
+    public OrderDTO completeOrder(Long userId, Long orderId) {
+        OrderHeader order = requireOwnedOrder(userId, orderId);
+        if (!Integer.valueOf(1).equals(order.getStatus())) {
+            throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可完成");
+        }
+        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), 1, 2, order.getVersion(), null);
+        if (updated == 0) {
+            throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可完成");
+        }
+        OrderOperationLog log = new OrderOperationLog();
+        log.setId(snowflakeIdWorker.nextId());
+        log.setOrderId(order.getId());
+        log.setOrderNo(order.getOrderNo());
+        log.setUserId(userId);
+        log.setOperator("USER");
+        log.setAction("complete");
+        log.setFromStatus(1);
+        log.setToStatus(2);
+        log.setRemark("服务完成，可提交评价");
+        orderOperationLogMapper.insert(log);
+        order.setStatus(2);
+        return toOrderDTO(order);
+    }
+
+    @Override
+    @Transactional
+    public int cancelExpiredPendingPaymentOrders(int timeoutMinutes) {
+        LocalDateTime deadline = LocalDateTime.now().minusMinutes(Math.max(timeoutMinutes, 1));
+        int cancelled = 0;
+        for (OrderHeader order : orderHeaderMapper.selectExpiredPendingPayment(deadline, 100)) {
+            int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), 0, 3, order.getVersion(), "支付超时自动取消");
+            if (updated > 0) {
+                OrderOperationLog log = new OrderOperationLog();
+                log.setId(snowflakeIdWorker.nextId());
+                log.setOrderId(order.getId());
+                log.setOrderNo(order.getOrderNo());
+                log.setUserId(order.getUserId());
+                log.setOperator("SYSTEM");
+                log.setAction("timeout_cancel");
+                log.setFromStatus(0);
+                log.setToStatus(3);
+                log.setRemark("支付超时自动取消");
+                orderOperationLogMapper.insert(log);
+                cancelled++;
+            }
+        }
+        return cancelled;
     }
 
     private IdempotentRecord lockUsableToken(String idempotentKey) {
@@ -271,6 +346,19 @@ public class OrderServiceImpl implements IOrderService {
             throw new BusinessException(ORDER_FORBIDDEN, "无权操作此订单");
         }
         return order;
+    }
+
+    private OrderDTO toOrderDTO(OrderHeader order) {
+        OrderDTO dto = new OrderDTO();
+        dto.setOrderId(order.getId());
+        dto.setOrderNo(order.getOrderNo());
+        dto.setUserId(order.getUserId());
+        dto.setStatus(order.getStatus());
+        dto.setServiceItemId(order.getServiceItemId());
+        dto.setServiceItemName(order.getServiceItemName());
+        dto.setSpecName(order.getSpecName());
+        dto.setTotalAmount(order.getTotalAmount());
+        return dto;
     }
 
     private OrderListResponse toListResponse(OrderHeader order) {

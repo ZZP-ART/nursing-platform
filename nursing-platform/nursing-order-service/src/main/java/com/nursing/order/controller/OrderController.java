@@ -19,6 +19,9 @@ import com.nursing.order.service.IdempotentService;
 import com.nursing.order.service.PaymentService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.util.StringUtils;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,17 +41,22 @@ public class OrderController {
     private final IdempotentService idempotentService;
     private final IOrderService orderService;
     private final PaymentService paymentService;
+    private final String gatewayToken;
 
     public OrderController(IdempotentService idempotentService, IOrderService orderService,
-                           PaymentService paymentService) {
+                           PaymentService paymentService,
+                           @Value("${nursing.gateway.trusted-token:}") String gatewayToken) {
         this.idempotentService = idempotentService;
         this.orderService = orderService;
         this.paymentService = paymentService;
+        this.gatewayToken = gatewayToken;
     }
 
     @PostMapping("/prepay-token")
     public Result<PrepayTokenResponse> prepayToken(
-            @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken) {
+        requireTrustedGateway(trustedToken);
         requireUserId(userId);
         return Result.success(idempotentService.issuePrepayToken());
     }
@@ -56,38 +64,57 @@ public class OrderController {
     @PostMapping
     public Result<OrderCreateResponse> create(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @RequestHeader(value = "Idempotent-Key", required = false) String idempotentKey,
             @Valid @RequestBody OrderCreateRequest request) {
+        requireTrustedGateway(trustedToken);
         return Result.success(orderService.createOrder(requireUserId(userId), idempotentKey, request));
     }
 
     @GetMapping
     public Result<PageResult<OrderListResponse>> list(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @Valid OrderPageQuery query) {
+        requireTrustedGateway(trustedToken);
         return Result.success(orderService.listOrders(requireUserId(userId), query));
     }
 
     @GetMapping("/{id}")
     public Result<OrderDetailResponse> detail(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "order id must be positive") Long id) {
+        requireTrustedGateway(trustedToken);
         return Result.success(orderService.getOrderDetail(requireUserId(userId), id));
     }
 
     @PostMapping("/{id}/cancel")
     public Result<CancelResponse> cancel(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "order id must be positive") Long id,
             @Valid @RequestBody(required = false) CancelOrderRequest request) {
+        requireTrustedGateway(trustedToken);
         return Result.success(orderService.cancelOrder(requireUserId(userId), id, request));
+    }
+
+    @PostMapping("/{id}/complete")
+    public Result<com.nursing.common.dto.OrderDTO> complete(
+            @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
+            @PathVariable("id") @Positive(message = "order id must be positive") Long id) {
+        requireTrustedGateway(trustedToken);
+        return Result.success(orderService.completeOrder(requireUserId(userId), id));
     }
 
     @PostMapping("/{id}/pay")
     public Result<PayResponse> pay(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
+            @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "order id must be positive") Long id,
             @Valid @RequestBody PayRequest request) {
+        requireTrustedGateway(trustedToken);
         return Result.success(paymentService.initiatePayment(requireUserId(userId), id, request));
     }
 
@@ -101,5 +128,11 @@ public class OrderController {
             throw new BusinessException(ApiCode.UNAUTHORIZED, "Unauthorized");
         }
         return userId;
+    }
+
+    private void requireTrustedGateway(String trustedToken) {
+        if (!StringUtils.hasText(gatewayToken) || !gatewayToken.equals(trustedToken)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "Forbidden", HttpStatus.FORBIDDEN);
+        }
     }
 }

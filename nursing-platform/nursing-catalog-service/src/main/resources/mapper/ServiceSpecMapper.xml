@@ -6,6 +6,7 @@
 
     <resultMap id="SpecMap" type="com.nursing.catalog.dto.vo.SpecVO">
         <id property="specId" column="spec_id"/>
+        <result property="serviceItemId" column="service_item_id"/>
         <result property="name" column="name"/>
         <result property="price" column="price"/>
         <result property="originalPrice" column="original_price"/>
@@ -16,6 +17,7 @@
     <select id="selectByItemId" resultMap="SpecMap">
         SELECT
             id AS spec_id,
+            service_item_id,
             name,
             price,
             original_price,
@@ -26,5 +28,24 @@
           AND status = 1
           AND is_deleted = 0
         ORDER BY id ASC
+    </select>
+
+    <select id="selectByItemIds" resultMap="SpecMap">
+        SELECT
+            id AS spec_id,
+            service_item_id,
+            name,
+            price,
+            original_price,
+            duration,
+            status
+        FROM service_spec
+        WHERE service_item_id IN
+        <foreach collection="serviceItemIds" item="serviceItemId" open="(" separator="," close=")">
+            #{serviceItemId}
+        </foreach>
+          AND status = 1
+          AND is_deleted = 0
+        ORDER BY service_item_id ASC, id ASC
     </select>
 </mapper>

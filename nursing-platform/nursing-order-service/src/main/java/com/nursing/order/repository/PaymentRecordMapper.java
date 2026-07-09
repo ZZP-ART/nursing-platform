@@ -13,4 +13,6 @@ public interface PaymentRecordMapper {
     PaymentRecord selectByNotifyId(@Param("notifyId") String notifyId);
 
     PaymentRecord selectByOrderId(@Param("orderId") Long orderId);
+
+    int markRefundedByOrderId(@Param("orderId") Long orderId);
 }

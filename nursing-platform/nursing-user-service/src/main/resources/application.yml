@@ -1,52 +1,53 @@
- server:
-   port: 8081
- 
- spring:
-   application:
-     name: nursing-user-service
-   datasource:
-     url: jdbc:mysql://localhost:3306/user_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
-     username: root
-     password: root123
-     driver-class-name: com.mysql.cj.jdbc.Driver
-     hikari:
-       maximum-pool-size: 20
-       minimum-idle: 5
-   data:
-     redis:
-       host: localhost
-       port: 6379
-   cloud:
-     nacos:
-       discovery:
-         server-addr: localhost:8848
-   kafka:
-     bootstrap-servers: localhost:9092
-   servlet:
-     multipart:
-       max-file-size: 10MB
-       max-request-size: 20MB
- 
- mybatis:
-   mapper-locations: classpath:mapper/*.xml
-   type-aliases-package: com.nursing.user.entity
-   configuration:
-     map-underscore-to-camel-case: true
-     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
- 
- # Snowflake ID worker config
- nursing:
-   jwt:
-     expire-seconds: 604800
-     secret: ${NURSING_JWT_SECRET:}
-   sms:
-     mock: true
-     rate-limit-seconds: 60
-     daily-limit: 5
-     expire-seconds: 300
-   file:
-     upload-dir: ${NURSING_UPLOAD_DIR:uploads}
-     public-base-url: ${NURSING_FILE_PUBLIC_BASE_URL:http://localhost:8081/uploads}
-   snowflake:
-     worker-id: 1
-     datacenter-id: 1
+server:
+  port: 8081
+
+spring:
+  application:
+    name: nursing-user-service
+  datasource:
+    url: ${NURSING_USER_DB_URL:jdbc:mysql://mysql:3306/user_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
+    username: ${NURSING_DB_USERNAME:nursing}
+    password: ${NURSING_DB_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  data:
+    redis:
+      host: ${NURSING_REDIS_HOST:redis}
+      port: ${NURSING_REDIS_PORT:6379}
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+  kafka:
+    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.nursing.user.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+nursing:
+  jwt:
+    expire-seconds: 604800
+    secret: ${NURSING_JWT_SECRET:}
+  security:
+    id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY:}
+  sms:
+    mock: true
+    rate-limit-seconds: 60
+    daily-limit: 5
+    expire-seconds: 300
+  file:
+    upload-dir: ${NURSING_UPLOAD_DIR:uploads}
+    public-base-url: ${NURSING_FILE_PUBLIC_BASE_URL:http://gateway:8080/uploads}
+  snowflake:
+    worker-id: 1
+    datacenter-id: 1
