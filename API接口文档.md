@@ -95,6 +95,48 @@ API 的 Base URL 不在本文档中写死，而是在前端项目中按环境配
 
 ```
 
+## 附录：2026-07-10 用户资料并发与文件上传幂等修订
+
+### PATCH /api/v1/users/profile
+
+- `GET /api/v1/users/profile` 响应 `data.version`，前端编辑资料时必须保存该值。
+- `PATCH /api/v1/users/profile` 请求体新增必填字段 `version`，取值为最近一次 `GET /profile` 或资料更新成功响应里的版本号。
+- 更新成功后响应 `data.version` 为新的版本号。
+- 若提交的 `version` 已过期且提交内容与当前资料不同，返回 `409 / 2016`，message 为“个人资料已被更新，请刷新后重试”。
+- 若旧版本请求的内容已经被前一次请求成功写入，服务端按重复提交处理并返回成功，不再次递增版本。
+- `idCard` 仍由服务端 AES-GCM 加密存储，响应只返回脱敏值。
+
+请求示例：
+
+```json
+{
+  "version": 3,
+  "nickname": "张阿姨",
+  "gender": 2
+}
+```
+
+### POST /api/v1/files/upload
+
+- 请求头新增必填 `Idempotent-Key`，长度不超过 64 个字符；推荐前端使用 `crypto.randomUUID()` 为每个本地上传槽位生成。
+- 同一个本地文件槽位的快速多点、网络超时重试、App 内补偿重试必须复用同一个 `Idempotent-Key`。
+- 用户删除该本地文件或重新选择另一份文件时，前端生成新的 `Idempotent-Key`。
+- 服务端按鉴权 `userId + Idempotent-Key` 做幂等隔离，不信任客户端传入 userId。
+- 同 userId、同 key、同文件内容重试返回首次上传结果；同 userId、同 key、不同文件内容返回 `409 / 2017`。
+- 同 userId、同 `bizType`、同 SHA-256 文件内容会复用同一目标文件，避免同一文件因重试生成多个副本。
+- 并发重复请求若首个请求仍在处理中，服务端返回 `409 / 2018`，前端可稍后用同一个 key 重试。
+- 服务端先写临时文件并计算 SHA-256，再使用原子 move 落到最终路径。
+
+curl 示例：
+
+```bash
+curl -X POST '{BASE_URL}/api/v1/files/upload' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIs...' \
+  -H 'Idempotent-Key: 8fb0d88b-83da-4a79-9f2e-6c1a7e3e54b8' \
+  -F 'file=@/path/to/avatar.jpg' \
+  -F 'bizType=avatar'
+```
+
 **分页响应：**
 
 ```json

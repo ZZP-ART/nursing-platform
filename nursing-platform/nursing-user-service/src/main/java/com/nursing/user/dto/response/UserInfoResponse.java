@@ -14,6 +14,7 @@ public class UserInfoResponse {
     private Integer gender;
     private String idCard;
     private Integer status;
+    private Integer version;
     private LocalDateTime lastLoginTime;
     private LocalDateTime createTime;
 
@@ -71,6 +72,14 @@ public class UserInfoResponse {
 
     public void setStatus(Integer status) {
         this.status = status;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     public LocalDateTime getLastLoginTime() {

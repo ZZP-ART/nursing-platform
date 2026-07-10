@@ -9,6 +9,7 @@ public class ProfileUpdateResponse {
     private String nickname;
     private String avatar;
     private Integer gender;
+    private Integer version;
 
     public Long getUserId() {
         return userId;
@@ -40,5 +41,13 @@ public class ProfileUpdateResponse {
 
     public void setGender(Integer gender) {
         this.gender = gender;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 }

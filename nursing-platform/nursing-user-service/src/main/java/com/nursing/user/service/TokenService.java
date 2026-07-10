@@ -71,13 +71,20 @@ public class TokenService {
     }
 
     public TokenPayload validateToken(String token) {
+        return validateToken(token, true);
+    }
+
+    public TokenPayload validateTokenForLogout(String token) {
+        return validateToken(token, false);
+    }
+
+    private TokenPayload validateToken(String token, boolean rejectBlacklisted) {
         Claims claims = parseClaims(token);
         String tokenId = claims.getId();
         if (!StringUtils.hasText(tokenId)) {
             throw unauthorized();
         }
-        Boolean blacklisted = redisTemplate.hasKey(blacklistKey(tokenId));
-        if (Boolean.TRUE.equals(blacklisted)) {
+        if (rejectBlacklisted && Boolean.TRUE.equals(redisTemplate.hasKey(blacklistKey(tokenId)))) {
             throw new UserBusinessException(
                     HttpStatus.UNAUTHORIZED,
                     UserErrorCode.TOKEN_BLACKLISTED,
@@ -102,6 +109,7 @@ public class TokenService {
         }
         long ttlSeconds = remainingSeconds(claims.getExpiration());
         if (ttlSeconds > 0) {
+            // 登出不修改 JWT 本身，而是把 tokenId 拉黑到原过期时间。
             redisTemplate.opsForValue().set(blacklistKey(tokenId), "1", ttlSeconds, TimeUnit.SECONDS);
         }
     }
@@ -128,6 +136,7 @@ public class TokenService {
         userToken.setCreateTime(now);
         userTokenMapper.insert(userToken);
 
+        // Redis 记录的 TTL 与 JWT 有效期保持一致，避免过期登录态长期占用缓存。
         long ttlSeconds = Math.max(1L, jwtProperties.getExpireSeconds());
         redisTemplate.opsForValue().set(
                 userTokenKey(userId, tokenId),

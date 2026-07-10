@@ -41,10 +41,24 @@ nursing:
   security:
     id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY:}
   sms:
-    mock: true
+    provider: aliyun
     rate-limit-seconds: 60
-    daily-limit: 5
+    phone-daily-limit: 10
+    ip-hourly-limit: 60
+    ip-daily-limit: 300
+    verify-max-attempts: 5
     expire-seconds: 300
+    sign-name: ${ALIYUN_SMS_SIGN_NAME:}
+    templates:
+      register: ${ALIYUN_SMS_TEMPLATE_REGISTER:}
+      login: ${ALIYUN_SMS_TEMPLATE_LOGIN:}
+      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD:}
+    aliyun:
+      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID:}
+      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET:}
+      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}
+      connect-timeout-millis: ${ALIYUN_SMS_CONNECT_TIMEOUT_MILLIS:3000}
+      read-timeout-millis: ${ALIYUN_SMS_READ_TIMEOUT_MILLIS:5000}
   file:
     upload-dir: ${NURSING_UPLOAD_DIR:uploads}
     public-base-url: ${NURSING_FILE_PUBLIC_BASE_URL:http://gateway:8080/uploads}

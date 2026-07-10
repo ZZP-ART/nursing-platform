@@ -10,11 +10,16 @@ import com.nursing.user.entity.User;
 import com.nursing.user.exception.UserBusinessException;
 import com.nursing.user.mapper.SmsRecordMapper;
 import com.nursing.user.mapper.UserMapper;
+import com.nursing.user.security.ClientIpResolver;
+import com.nursing.user.sms.SmsSendCommand;
+import com.nursing.user.sms.SmsSendResult;
+import com.nursing.user.sms.SmsSender;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDateTime;
 import java.util.concurrent.ThreadLocalRandom;
@@ -24,8 +29,10 @@ import java.util.concurrent.TimeUnit;
 public class SmsService {
 
     private static final String SMS_TYPE_REGISTER = "register";
-    private static final String SMS_RATE_KEY_PREFIX = "sms:rate:";
+    private static final String PROVIDER_ALIYUN = "aliyun";
+    private static final int STATUS_PENDING = 0;
     private static final String SMS_CODE_KEY_PREFIX = "sms:code:";
+    private static final String SMS_VERIFY_FAIL_KEY_PREFIX = "sms:verify:fail:";
 
     private final SmsProperties smsProperties;
     private final RedisTemplate<String, String> redisTemplate;
@@ -33,61 +40,68 @@ public class SmsService {
     private final SmsRecordMapper smsRecordMapper;
     private final SnowflakeIdWorker snowflakeIdWorker;
     private final PasswordEncoder passwordEncoder;
+    private final SmsSender smsSender;
+    private final SmsRateLimiter smsRateLimiter;
+    private final ClientIpResolver clientIpResolver;
+    private final TransactionTemplate transactionTemplate;
 
     public SmsService(SmsProperties smsProperties,
                       RedisTemplate<String, String> redisTemplate,
                       UserMapper userMapper,
                       SmsRecordMapper smsRecordMapper,
                       SnowflakeIdWorker snowflakeIdWorker,
-                      PasswordEncoder passwordEncoder) {
+                      PasswordEncoder passwordEncoder,
+                      SmsSender smsSender,
+                      SmsRateLimiter smsRateLimiter,
+                      ClientIpResolver clientIpResolver,
+                      TransactionTemplate transactionTemplate) {
         this.smsProperties = smsProperties;
         this.redisTemplate = redisTemplate;
         this.userMapper = userMapper;
         this.smsRecordMapper = smsRecordMapper;
         this.snowflakeIdWorker = snowflakeIdWorker;
         this.passwordEncoder = passwordEncoder;
+        this.smsSender = smsSender;
+        this.smsRateLimiter = smsRateLimiter;
+        this.clientIpResolver = clientIpResolver;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
-    public SmsCodeResponse sendSmsCode(SmsCodeRequest request) {
-        validatePhoneForSmsType(request.getPhone(), request.getSmsType());
-        enforceRateLimit(request.getPhone());
+    public SmsCodeResponse sendSmsCode(SmsCodeRequest request, HttpServletRequest httpRequest) {
+        String phone = request.getPhone();
+        String smsType = request.getSmsType();
+        String requestIp = clientIpResolver.resolve(httpRequest);
 
-        int todayCount = smsRecordMapper.countTodayByPhone(request.getPhone());
-        if (todayCount >= smsProperties.getDailyLimit()) {
-            throw new UserBusinessException(
-                    HttpStatus.TOO_MANY_REQUESTS,
-                    UserErrorCode.SMS_DAILY_LIMIT_REACHED,
-                    "今日发送次数已达上限");
-        }
+        validatePhoneForSmsType(phone, smsType);
+        smsRateLimiter.checkAndReserve(phone, smsType, requestIp);
 
         String code = generateCode();
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime expireTime = now.plusSeconds(smsProperties.getExpireSeconds());
+        Long recordId = createPendingRecord(phone, smsType, requestIp, code);
 
-        redisTemplate.opsForValue().set(
-                smsCodeKey(request.getSmsType(), request.getPhone()),
-                code,
-                smsProperties.getExpireSeconds(),
-                TimeUnit.SECONDS);
-        redisTemplate.opsForValue().set(
-                SMS_RATE_KEY_PREFIX + request.getPhone(),
-                "1",
-                smsProperties.getRateLimitSeconds(),
-                TimeUnit.SECONDS);
+        try {
+            SmsSendResult sendResult = smsSender.send(new SmsSendCommand(
+                    phone,
+                    smsType,
+                    code,
+                    smsProperties.getSignName(),
+                    smsProperties.templateCodeFor(smsType)));
+            if (!sendResult.success()) {
+                if (sendResult.resultUnknown()) {
+                    unknownSend(recordId, sendResult.failureReason());
+                }
+                failSend(recordId, phone, smsType, sendResult.failureReason());
+            }
 
-        SmsRecord record = new SmsRecord();
-        record.setId(snowflakeIdWorker.nextId());
-        record.setPhone(request.getPhone());
-        record.setSmsType(request.getSmsType());
-        record.setCode(passwordEncoder.encode(code));
-        record.setStatus(1);
-        record.setSendTime(now);
-        record.setExpireTime(expireTime);
-        record.setCreateTime(now);
-        smsRecordMapper.insert(record);
-
-        return new SmsCodeResponse(smsProperties.getExpireSeconds());
+            saveCodeToRedis(phone, smsType, code);
+            markSent(recordId, sendResult.providerRequestId());
+            return new SmsCodeResponse(smsProperties.getExpireSeconds());
+        } catch (UserBusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            redisTemplate.delete(smsCodeKey(smsType, phone));
+            unknownSend(recordId, e.getMessage());
+            throw smsSendFailed();
+        }
     }
 
     public void verifySmsCode(String phone, String smsType, String smsCode) {
@@ -99,13 +113,108 @@ public class SmsService {
                     UserErrorCode.SMS_CODE_EXPIRED,
                     "验证码已过期");
         }
+
+        enforceVerifyAttempts(phone, smsType, key);
         if (!cachedCode.equals(smsCode)) {
+            recordVerifyFailure(phone, smsType, key);
             throw new UserBusinessException(
                     HttpStatus.BAD_REQUEST,
                     UserErrorCode.SMS_CODE_INVALID,
                     "验证码错误");
         }
+
         redisTemplate.delete(key);
+        redisTemplate.delete(verifyFailKey(smsType, phone));
+        markLatestVerified(phone, smsType);
+    }
+
+    private Long createPendingRecord(String phone, String smsType, String requestIp, String code) {
+        return transactionTemplate.execute(status -> {
+            LocalDateTime now = LocalDateTime.now();
+            SmsRecord record = new SmsRecord();
+            record.setId(snowflakeIdWorker.nextId());
+            record.setPhone(phone);
+            record.setSmsType(smsType);
+            record.setCode(passwordEncoder.encode(code));
+            record.setStatus(STATUS_PENDING);
+            record.setRequestIp(requestIp);
+            record.setProvider(PROVIDER_ALIYUN);
+            record.setSendTime(now);
+            record.setExpireTime(now.plusSeconds(smsProperties.getExpireSeconds()));
+            record.setCreateTime(now);
+            record.setUpdateTime(now);
+            smsRecordMapper.insert(record);
+            return record.getId();
+        });
+    }
+
+    private void markSent(Long recordId, String providerRequestId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            int updated = smsRecordMapper.markSent(recordId, providerRequestId, LocalDateTime.now());
+            if (updated != 1) {
+                throw new IllegalStateException("Failed to mark SMS record as sent: " + recordId);
+            }
+        });
+    }
+
+    private void markFailed(Long recordId, String failureReason) {
+        transactionTemplate.executeWithoutResult(status ->
+                smsRecordMapper.markFailed(recordId, truncate(failureReason), LocalDateTime.now()));
+    }
+
+    private void markUnknown(Long recordId, String failureReason) {
+        transactionTemplate.executeWithoutResult(status ->
+                smsRecordMapper.markUnknown(recordId, truncate(failureReason), LocalDateTime.now()));
+    }
+
+    private void markLatestVerified(String phone, String smsType) {
+        transactionTemplate.executeWithoutResult(status ->
+                smsRecordMapper.markLatestVerified(phone, smsType, LocalDateTime.now()));
+    }
+
+    private void failSend(Long recordId, String phone, String smsType, String failureReason) {
+        markFailed(recordId, failureReason);
+        smsRateLimiter.releaseRate(phone, smsType);
+        throw smsSendFailed();
+    }
+
+    private void unknownSend(Long recordId, String failureReason) {
+        markUnknown(recordId, failureReason);
+        throw smsSendFailed();
+    }
+
+    private void saveCodeToRedis(String phone, String smsType, String code) {
+        redisTemplate.opsForValue().set(
+                smsCodeKey(smsType, phone),
+                code,
+                smsProperties.getExpireSeconds(),
+                TimeUnit.SECONDS);
+    }
+
+    private void enforceVerifyAttempts(String phone, String smsType, String codeKey) {
+        String failKey = verifyFailKey(smsType, phone);
+        String value = redisTemplate.opsForValue().get(failKey);
+        if (value == null) {
+            return;
+        }
+        int attempts = Integer.parseInt(value);
+        if (attempts >= smsProperties.getVerifyMaxAttempts()) {
+            redisTemplate.delete(codeKey);
+            throw new UserBusinessException(
+                    HttpStatus.BAD_REQUEST,
+                    UserErrorCode.SMS_CODE_INVALID,
+                    "验证码错误次数过多，请重新获取");
+        }
+    }
+
+    private void recordVerifyFailure(String phone, String smsType, String codeKey) {
+        String failKey = verifyFailKey(smsType, phone);
+        Long attempts = redisTemplate.opsForValue().increment(failKey);
+        if (attempts != null && attempts == 1L) {
+            Long ttl = redisTemplate.getExpire(codeKey, TimeUnit.SECONDS);
+            long expireSeconds = ttl == null || ttl <= 0 ? smsProperties.getExpireSeconds() : ttl;
+            redisTemplate.expire(failKey, expireSeconds, TimeUnit.SECONDS);
+        }
     }
 
     private void validatePhoneForSmsType(String phone, String smsType) {
@@ -124,21 +233,29 @@ public class SmsService {
         }
     }
 
-    private void enforceRateLimit(String phone) {
-        Boolean exists = redisTemplate.hasKey(SMS_RATE_KEY_PREFIX + phone);
-        if (Boolean.TRUE.equals(exists)) {
-            throw new UserBusinessException(
-                    HttpStatus.TOO_MANY_REQUESTS,
-                    UserErrorCode.SMS_SEND_TOO_FREQUENT,
-                    "发送过于频繁，请 60 秒后重试");
-        }
+    private UserBusinessException smsSendFailed() {
+        return new UserBusinessException(
+                HttpStatus.INTERNAL_SERVER_ERROR,
+                UserErrorCode.SMS_SEND_FAILED,
+                "短信发送失败，请稍后重试");
     }
 
     private String smsCodeKey(String smsType, String phone) {
         return SMS_CODE_KEY_PREFIX + smsType + ":" + phone;
     }
 
+    private String verifyFailKey(String smsType, String phone) {
+        return SMS_VERIFY_FAIL_KEY_PREFIX + smsType + ":" + phone;
+    }
+
     private String generateCode() {
         return String.format("%06d", ThreadLocalRandom.current().nextInt(1_000_000));
+    }
+
+    private String truncate(String value) {
+        if (value == null) {
+            return null;
+        }
+        return value.length() <= 512 ? value : value.substring(0, 512);
     }
 }

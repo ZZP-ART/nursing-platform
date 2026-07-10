@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.IdempotentRecordMapper">
+
+    <resultMap id="IdempotentRecordMap" type="com.nursing.user.entity.IdempotentRecord">
+        <id property="id" column="id"/>
+        <result property="idempotentKey" column="idempotent_key"/>
+        <result property="bizType" column="biz_type"/>
+        <result property="bizId" column="biz_id"/>
+        <result property="status" column="status"/>
+        <result property="expireTime" column="expire_time"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.user.entity.IdempotentRecord">
+        INSERT INTO idempotent_record (
+            id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+        ) VALUES (
+            #{id}, #{idempotentKey}, #{bizType}, #{bizId}, #{status}, #{expireTime}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectByKeyForUpdate" resultMap="IdempotentRecordMap">
+        SELECT id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+        FROM idempotent_record
+        WHERE idempotent_key = #{idempotentKey}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+
+    <update id="complete">
+        UPDATE idempotent_record
+        SET status = 1,
+            biz_id = #{bizId}
+        WHERE idempotent_key = #{idempotentKey}
+          AND status = 0
+    </update>
+</mapper>

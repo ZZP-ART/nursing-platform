@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.FileUploadRecordMapper">
+
+    <resultMap id="FileUploadRecordMap" type="com.nursing.user.entity.FileUploadRecord">
+        <id property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="idempotentKey" column="idempotent_key"/>
+        <result property="bizType" column="biz_type"/>
+        <result property="fileHash" column="file_hash"/>
+        <result property="fileName" column="file_name"/>
+        <result property="fileUrl" column="file_url"/>
+        <result property="relativePath" column="relative_path"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="contentType" column="content_type"/>
+        <result property="fileExt" column="file_ext"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.user.entity.FileUploadRecord">
+        INSERT INTO file_upload_record (
+            id, user_id, idempotent_key, biz_type, file_hash, file_name, file_url,
+            relative_path, file_size, content_type, file_ext, create_time
+        ) VALUES (
+            #{id}, #{userId}, #{idempotentKey}, #{bizType}, #{fileHash}, #{fileName}, #{fileUrl},
+            #{relativePath}, #{fileSize}, #{contentType}, #{fileExt}, #{createTime}
+        )
+    </insert>
+
+    <select id="selectById" resultMap="FileUploadRecordMap">
+        SELECT id, user_id, idempotent_key, biz_type, file_hash, file_name, file_url,
+               relative_path, file_size, content_type, file_ext, create_time
+        FROM file_upload_record
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <select id="selectByUserBizHash" resultMap="FileUploadRecordMap">
+        SELECT id, user_id, idempotent_key, biz_type, file_hash, file_name, file_url,
+               relative_path, file_size, content_type, file_ext, create_time
+        FROM file_upload_record
+        WHERE user_id = #{userId}
+          AND biz_type = #{bizType}
+          AND file_hash = #{fileHash}
+          AND file_ext = #{fileExt}
+        LIMIT 1
+    </select>
+</mapper>

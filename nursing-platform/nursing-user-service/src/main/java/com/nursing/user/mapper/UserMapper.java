@@ -17,6 +17,8 @@ public interface UserMapper {
 
     int updateById(User user);
 
+    int updateProfileByIdAndVersion(User user);
+
     int updatePassword(@Param("phone") String phone,
                        @Param("password") String password,
                        @Param("updateTime") LocalDateTime updateTime);

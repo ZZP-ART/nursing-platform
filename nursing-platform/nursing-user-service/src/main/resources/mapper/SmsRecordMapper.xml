@@ -10,24 +10,61 @@
         <result property="smsType" column="sms_type"/>
         <result property="code" column="code"/>
         <result property="status" column="status"/>
+        <result property="requestIp" column="request_ip"/>
+        <result property="provider" column="provider"/>
+        <result property="providerRequestId" column="provider_request_id"/>
+        <result property="failureReason" column="failure_reason"/>
         <result property="sendTime" column="send_time"/>
         <result property="expireTime" column="expire_time"/>
+        <result property="verifyTime" column="verify_time"/>
         <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.nursing.user.entity.SmsRecord">
         INSERT INTO sms_record (
-            id, phone, sms_type, code, status, send_time, expire_time, create_time
+            id, phone, sms_type, code, status, request_ip, provider,
+            send_time, expire_time, create_time, update_time
         ) VALUES (
-            #{id}, #{phone}, #{smsType}, #{code}, #{status}, #{sendTime}, #{expireTime}, #{createTime}
+            #{id}, #{phone}, #{smsType}, #{code}, #{status}, #{requestIp}, #{provider},
+            #{sendTime}, #{expireTime}, #{createTime}, #{updateTime}
         )
     </insert>
 
-    <select id="countTodayByPhone" resultType="int">
-        SELECT COUNT(1)
-        FROM sms_record
+    <update id="markSent">
+        UPDATE sms_record
+        SET status = 1,
+            provider_request_id = #{providerRequestId},
+            failure_reason = NULL,
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status = 0
+    </update>
+
+    <update id="markFailed">
+        UPDATE sms_record
+        SET status = 2,
+            failure_reason = #{failureReason},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status IN (0, 1)
+    </update>
+
+    <update id="markUnknown">
+        UPDATE sms_record
+        SET status = 5,
+            failure_reason = #{failureReason},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status = 0
+    </update>
+
+    <update id="markLatestVerified">
+        UPDATE sms_record
+        SET status = 3,
+            verify_time = #{verifyTime},
+            update_time = #{verifyTime}
         WHERE phone = #{phone}
-          AND send_time &gt;= CURDATE()
-          AND send_time &lt; DATE_ADD(CURDATE(), INTERVAL 1 DAY)
-    </select>
+          AND sms_type = #{smsType}
+          AND status = 1
+        ORDER BY send_time DESC
+        LIMIT 1
+    </update>
 </mapper>

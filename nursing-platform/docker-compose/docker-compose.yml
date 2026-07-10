@@ -9,6 +9,7 @@ services:
       - "${NURSING_MYSQL_PORT:-13306}:3306"
     volumes:
       - ./mysql/init:/docker-entrypoint-initdb.d
+      - ../nursing-user-service/deploy/mysql/init/01_user_schema.sql:/docker-entrypoint-initdb.d/01_user_schema.sql:ro
       - mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}"]

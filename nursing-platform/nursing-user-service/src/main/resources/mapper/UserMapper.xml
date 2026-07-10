@@ -16,22 +16,23 @@
         <result property="lastLoginTime" column="last_login_time"/>
         <result property="registerIp" column="register_ip"/>
         <result property="isDeleted" column="is_deleted"/>
+        <result property="version" column="version"/>
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
     </resultMap>
 
     <sql id="BaseColumns">
         id, phone, password, nickname, avatar, gender, id_card, status,
-        last_login_time, register_ip, is_deleted, create_time, update_time
+        last_login_time, register_ip, is_deleted, version, create_time, update_time
     </sql>
 
     <insert id="insert" parameterType="com.nursing.user.entity.User">
         INSERT INTO `user` (
             id, phone, password, nickname, avatar, gender, id_card, status,
-            last_login_time, register_ip, is_deleted, create_time, update_time
+            last_login_time, register_ip, is_deleted, version, create_time, update_time
         ) VALUES (
             #{id}, #{phone}, #{password}, #{nickname}, #{avatar}, #{gender}, #{idCard}, #{status},
-            #{lastLoginTime}, #{registerIp}, #{isDeleted}, #{createTime}, #{updateTime}
+            #{lastLoginTime}, #{registerIp}, #{isDeleted}, #{version}, #{createTime}, #{updateTime}
         )
     </insert>
 
@@ -65,6 +66,21 @@
             update_time = #{updateTime}
         </set>
         WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <update id="updateProfileByIdAndVersion" parameterType="com.nursing.user.entity.User">
+        UPDATE `user`
+        <set>
+            <if test="nickname != null">nickname = #{nickname},</if>
+            <if test="avatar != null">avatar = #{avatar},</if>
+            <if test="gender != null">gender = #{gender},</if>
+            <if test="idCard != null">id_card = #{idCard},</if>
+            update_time = #{updateTime},
+            version = version + 1
+        </set>
+        WHERE id = #{id}
+          AND version = #{version}
           AND is_deleted = 0
     </update>
 

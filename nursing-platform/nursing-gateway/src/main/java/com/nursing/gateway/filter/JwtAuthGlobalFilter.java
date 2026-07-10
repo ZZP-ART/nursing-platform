@@ -28,6 +28,7 @@ import java.util.List;
 public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String BLACKLIST_PREFIX = "jwt:blacklist:";
+    private static final String LOGOUT_PATH = "/api/v1/users/logout";
     private static final List<String> UNTRUSTED_USER_HEADERS = List.of("X-User-Id", "X-UserId", "userId", "X-Gateway-Token");
 
     private final GatewayJwtProperties jwtProperties;
@@ -69,7 +70,7 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
         return redisTemplate.hasKey(BLACKLIST_PREFIX + tokenId)
                 .onErrorReturn(true)
                 .flatMap(blacklisted -> {
-                    if (Boolean.TRUE.equals(blacklisted)) {
+                    if (Boolean.TRUE.equals(blacklisted) && !isLogoutPath(path)) {
                         return unauthorized(sanitizedExchange, 1003, "Token 已被列入黑名单");
                     }
                     ServerHttpRequest trustedRequest = sanitizedRequest.mutate()
@@ -91,6 +92,10 @@ public class JwtAuthGlobalFilter implements GlobalFilter, Ordered {
 
     private boolean isPublicPath(String path) {
         return jwtProperties.getPublicPaths().stream().anyMatch(pattern -> pathMatcher.match(pattern, path));
+    }
+
+    private boolean isLogoutPath(String path) {
+        return pathMatcher.match(LOGOUT_PATH, path);
     }
 
     private String resolveBearerToken(String authorizationHeader) {

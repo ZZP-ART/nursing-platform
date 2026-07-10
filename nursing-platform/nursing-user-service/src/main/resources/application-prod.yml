@@ -4,4 +4,13 @@ mybatis:
 
 nursing:
   sms:
-    mock: false
+    provider: aliyun
+    sign-name: ${ALIYUN_SMS_SIGN_NAME}
+    templates:
+      register: ${ALIYUN_SMS_TEMPLATE_REGISTER}
+      login: ${ALIYUN_SMS_TEMPLATE_LOGIN}
+      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD}
+    aliyun:
+      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID}
+      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET}
+      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}

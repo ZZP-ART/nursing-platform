@@ -9,5 +9,19 @@ public interface SmsRecordMapper {
 
     int insert(SmsRecord smsRecord);
 
-    int countTodayByPhone(@Param("phone") String phone);
+    int markSent(@Param("id") Long id,
+                 @Param("providerRequestId") String providerRequestId,
+                 @Param("updateTime") java.time.LocalDateTime updateTime);
+
+    int markFailed(@Param("id") Long id,
+                   @Param("failureReason") String failureReason,
+                   @Param("updateTime") java.time.LocalDateTime updateTime);
+
+    int markUnknown(@Param("id") Long id,
+                    @Param("failureReason") String failureReason,
+                    @Param("updateTime") java.time.LocalDateTime updateTime);
+
+    int markLatestVerified(@Param("phone") String phone,
+                           @Param("smsType") String smsType,
+                           @Param("verifyTime") java.time.LocalDateTime verifyTime);
 }

@@ -8,6 +8,7 @@ import org.springframework.web.servlet.HandlerInterceptor;
 
 @Component
 public class UserTokenInterceptor implements HandlerInterceptor {
+    private static final String LOGOUT_PATH = "/api/v1/users/logout";
 
     private final TokenService tokenService;
 
@@ -18,9 +19,16 @@ public class UserTokenInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
         String token = tokenService.resolveBearerToken(request.getHeader("Authorization"));
-        TokenService.TokenPayload payload = tokenService.validateToken(token);
+        TokenService.TokenPayload payload = isLogoutRequest(request)
+                ? tokenService.validateTokenForLogout(token)
+                : tokenService.validateToken(token);
+        // 后续 Controller 通过 request attribute 获取可信用户身份，不信任客户端自传 userId。
         request.setAttribute("userId", payload.getUserId());
         request.setAttribute("token", token);
         return true;
+    }
+
+    private boolean isLogoutRequest(HttpServletRequest request) {
+        return LOGOUT_PATH.equals(request.getRequestURI());
     }
 }

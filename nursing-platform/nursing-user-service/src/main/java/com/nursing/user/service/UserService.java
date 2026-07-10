@@ -14,6 +14,7 @@ import com.nursing.user.entity.User;
 import com.nursing.user.exception.UserBusinessException;
 import com.nursing.user.mapper.UserMapper;
 import com.nursing.user.security.IdCardCrypto;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 @Service
 public class UserService {
@@ -56,10 +58,7 @@ public class UserService {
     public AuthResponse register(RegisterRequest request) {
         User existing = userMapper.selectByPhone(request.getPhone());
         if (existing != null) {
-            throw new UserBusinessException(
-                    HttpStatus.CONFLICT,
-                    UserErrorCode.REGISTER_PHONE_CONFLICT,
-                    "该手机号已注册");
+            throw registerPhoneConflict();
         }
         smsService.verifySmsCode(request.getPhone(), SMS_TYPE_REGISTER, request.getSmsCode());
 
@@ -72,9 +71,14 @@ public class UserService {
         user.setGender(0);
         user.setStatus(0);
         user.setIsDeleted(0);
+        user.setVersion(0);
         user.setCreateTime(now);
         user.setUpdateTime(now);
-        userMapper.insert(user);
+        try {
+            userMapper.insert(user);
+        } catch (DuplicateKeyException e) {
+            throw registerPhoneConflict();
+        }
 
         return issueAuthResponse(user);
     }
@@ -106,7 +110,6 @@ public class UserService {
 
     public void logout(String authorizationHeader) {
         String token = tokenService.resolveBearerToken(authorizationHeader);
-        tokenService.validateToken(token);
         tokenService.invalidateToken(token);
     }
 
@@ -136,12 +139,23 @@ public class UserService {
 
     @Transactional
     public ProfileUpdateResponse updateProfile(Long userId, UpdateUserProfileRequest request) {
-        requireUser(userId);
+        User current = requireUser(userId);
         if (StringUtils.hasText(request.getIdCard()) && !isValidIdCard(request.getIdCard())) {
             throw new UserBusinessException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     UserErrorCode.ID_CARD_INVALID,
                     "身份证号格式不正确");
+        }
+
+        boolean sameContent = isSameProfileContent(current, request);
+        if (!Objects.equals(current.getVersion(), request.getVersion())) {
+            if (sameContent) {
+                return toProfileUpdateResponse(current);
+            }
+            throw profileVersionConflict();
+        }
+        if (sameContent) {
+            return toProfileUpdateResponse(current);
         }
 
         User update = new User();
@@ -150,16 +164,34 @@ public class UserService {
         update.setAvatar(request.getAvatar());
         update.setGender(request.getGender());
         update.setIdCard(StringUtils.hasText(request.getIdCard()) ? idCardCrypto.encrypt(request.getIdCard()) : request.getIdCard());
+        update.setVersion(request.getVersion());
         update.setUpdateTime(LocalDateTime.now());
-        userMapper.updateById(update);
+        if (userMapper.updateProfileByIdAndVersion(update) == 0) {
+            User latest = requireUser(userId);
+            if (isSameProfileContent(latest, request)) {
+                return toProfileUpdateResponse(latest);
+            }
+            throw profileVersionConflict();
+        }
 
-        User updated = requireUser(userId);
-        ProfileUpdateResponse response = new ProfileUpdateResponse();
-        response.setUserId(updated.getId());
-        response.setNickname(updated.getNickname());
-        response.setAvatar(updated.getAvatar());
-        response.setGender(updated.getGender());
-        return response;
+        return toProfileUpdateResponse(requireUser(userId));
+    }
+
+    private boolean isSameProfileContent(User current, UpdateUserProfileRequest request) {
+        if (request.getNickname() != null && !Objects.equals(request.getNickname(), current.getNickname())) {
+            return false;
+        }
+        if (request.getAvatar() != null && !Objects.equals(request.getAvatar(), current.getAvatar())) {
+            return false;
+        }
+        if (request.getGender() != null && !Objects.equals(request.getGender(), current.getGender())) {
+            return false;
+        }
+        if (request.getIdCard() != null) {
+            String currentIdCard = idCardCrypto.decryptIfNeeded(current.getIdCard());
+            return Objects.equals(request.getIdCard(), currentIdCard);
+        }
+        return true;
     }
 
     private void validatePasswordLogin(LoginRequest request, User user) {
@@ -207,6 +239,7 @@ public class UserService {
         response.setAvatar(user.getAvatar());
         response.setGender(user.getGender());
         response.setStatus(user.getStatus());
+        response.setVersion(user.getVersion());
         return response;
     }
 
@@ -215,6 +248,16 @@ public class UserService {
         response.setIdCard(maskIdCard(idCardCrypto.decryptIfNeeded(user.getIdCard())));
         response.setLastLoginTime(user.getLastLoginTime());
         response.setCreateTime(user.getCreateTime());
+        return response;
+    }
+
+    private ProfileUpdateResponse toProfileUpdateResponse(User user) {
+        ProfileUpdateResponse response = new ProfileUpdateResponse();
+        response.setUserId(user.getId());
+        response.setNickname(user.getNickname());
+        response.setAvatar(user.getAvatar());
+        response.setGender(user.getGender());
+        response.setVersion(user.getVersion());
         return response;
     }
 
@@ -264,5 +307,19 @@ public class UserService {
 
     private UserBusinessException paramError(String message) {
         return new UserBusinessException(HttpStatus.BAD_REQUEST, ApiCode.PARAM_ERROR, message);
+    }
+
+    private UserBusinessException registerPhoneConflict() {
+        return new UserBusinessException(
+                HttpStatus.CONFLICT,
+                UserErrorCode.REGISTER_PHONE_CONFLICT,
+                "该手机号已注册");
+    }
+
+    private UserBusinessException profileVersionConflict() {
+        return new UserBusinessException(
+                HttpStatus.CONFLICT,
+                UserErrorCode.PROFILE_VERSION_CONFLICT,
+                "个人资料已被更新，请刷新后重试");
     }
 }

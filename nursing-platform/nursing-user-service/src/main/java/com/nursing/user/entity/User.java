@@ -15,6 +15,7 @@ public class User {
     private LocalDateTime lastLoginTime;
     private String registerIp;
     private Integer isDeleted;
+    private Integer version;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
@@ -104,6 +105,14 @@ public class User {
 
     public void setIsDeleted(Integer isDeleted) {
         this.isDeleted = isDeleted;
+    }
+
+    public Integer getVersion() {
+        return version;
+    }
+
+    public void setVersion(Integer version) {
+        this.version = version;
     }
 
     public LocalDateTime getCreateTime() {

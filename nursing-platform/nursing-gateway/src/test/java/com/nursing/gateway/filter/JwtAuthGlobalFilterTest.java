@@ -94,6 +94,44 @@ class JwtAuthGlobalFilterTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
     }
 
+    @Test
+    void blacklistedJwtCanReachLogout() {
+        String tokenId = UUID.randomUUID().toString();
+        when(redisTemplate.hasKey("jwt:blacklist:" + tokenId)).thenReturn(Mono.just(true));
+        AtomicReference<ServerWebExchange> forwarded = new AtomicReference<>();
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/users/logout")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(tokenId, 10001L))
+                .header("X-User-Id", "999"));
+
+        filter.filter(exchange, next -> {
+            forwarded.set(next);
+            return Mono.empty();
+        }).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isNull();
+        assertThat(forwarded.get().getRequest().getHeaders().getFirst("X-User-Id")).isEqualTo("10001");
+        assertThat(forwarded.get().getRequest().getHeaders().getFirst("X-Gateway-Token")).isEqualTo("gateway-token");
+    }
+
+    @Test
+    void logoutWithoutTokenReturns401() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/users/logout"));
+
+        filter.filter(exchange, next -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
+    @Test
+    void logoutWithInvalidTokenReturns401() {
+        MockServerWebExchange exchange = MockServerWebExchange.from(MockServerHttpRequest.post("/api/v1/users/logout")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token"));
+
+        filter.filter(exchange, next -> Mono.empty()).block();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+    }
+
     private String token(String tokenId, Long userId) {
         Instant now = Instant.now();
         return Jwts.builder()

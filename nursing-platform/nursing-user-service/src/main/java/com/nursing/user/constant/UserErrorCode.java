@@ -19,6 +19,9 @@ public final class UserErrorCode {
     public static final int ID_CARD_INVALID = 2013;
     public static final int FILE_TOO_LARGE = 2014;
     public static final int FILE_UPLOAD_FAILED = 2015;
+    public static final int PROFILE_VERSION_CONFLICT = 2016;
+    public static final int FILE_IDEMPOTENCY_CONFLICT = 2017;
+    public static final int FILE_UPLOAD_PROCESSING = 2018;
 
     private UserErrorCode() {
     }
