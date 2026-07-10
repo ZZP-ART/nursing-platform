@@ -20,18 +20,11 @@ mybatis:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
  
 nursing:
+  auth:
+    allow-local-token-validation: ${NURSING_ALLOW_LOCAL_TOKEN_VALIDATION:true}
+  gateway:
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:dev-gateway-token-for-nursing-platform}
   jwt:
     secret: ${NURSING_JWT_SECRET:dev-jwt-secret-for-nursing-platform-32bytes}
   security:
     id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY:0123456789abcdef0123456789abcdef}
-  sms:
-    provider: aliyun
-    sign-name: ${ALIYUN_SMS_SIGN_NAME:}
-    templates:
-      register: ${ALIYUN_SMS_TEMPLATE_REGISTER:}
-      login: ${ALIYUN_SMS_TEMPLATE_LOGIN:}
-      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD:}
-    aliyun:
-      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID:}
-      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET:}
-      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}

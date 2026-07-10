@@ -37,6 +37,7 @@ import static org.mockito.Mockito.when;
 
 class UserLogoutRetrySafetyTest {
     private static final String SECRET = "dev-jwt-secret-for-nursing-platform-32bytes";
+    private static final String GATEWAY_TOKEN = "dev-gateway-token-for-nursing-platform";
 
     private RedisTemplate<String, String> redisTemplate;
     private ValueOperations<String, String> valueOperations;
@@ -62,7 +63,7 @@ class UserLogoutRetrySafetyTest {
     void protectedPathRejectsBlacklistedToken() {
         String tokenId = UUID.randomUUID().toString();
         when(redisTemplate.hasKey("jwt:blacklist:" + tokenId)).thenReturn(true);
-        UserTokenInterceptor interceptor = new UserTokenInterceptor(tokenService);
+        UserTokenInterceptor interceptor = localTokenInterceptor();
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/users/profile");
         request.addHeader("Authorization", "Bearer " + token(tokenId, 10001L));
 
@@ -74,8 +75,25 @@ class UserLogoutRetrySafetyTest {
     @Test
     void logoutPathAllowsBlacklistedTokenThroughInterceptor() {
         String tokenId = UUID.randomUUID().toString();
-        UserTokenInterceptor interceptor = new UserTokenInterceptor(tokenService);
+        UserTokenInterceptor interceptor = localTokenInterceptor();
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/users/logout");
+        request.addHeader("Authorization", "Bearer " + token(tokenId, 10001L));
+
+        boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
+
+        assertThat(result).isTrue();
+        assertThat(request.getAttribute("userId")).isEqualTo(10001L);
+        assertThat(request.getAttribute("token")).isEqualTo(tokenService.resolveBearerToken(request.getHeader("Authorization")));
+        verify(redisTemplate, never()).hasKey("jwt:blacklist:" + tokenId);
+    }
+
+    @Test
+    void trustedGatewayHeaderInjectsUserIdWithoutLocalJwtValidation() {
+        String tokenId = UUID.randomUUID().toString();
+        UserTokenInterceptor interceptor = gatewayOnlyInterceptor();
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/users/profile");
+        request.addHeader("X-Gateway-Token", GATEWAY_TOKEN);
+        request.addHeader("X-User-Id", "10001");
         request.addHeader("Authorization", "Bearer " + token(tokenId, 10001L));
 
         boolean result = interceptor.preHandle(request, new MockHttpServletResponse(), new Object());
@@ -105,6 +123,14 @@ class UserLogoutRetrySafetyTest {
 
         verify(valueOperations, times(2)).set(eq("jwt:blacklist:" + tokenId), eq("1"), anyLong(), eq(TimeUnit.SECONDS));
         verify(redisTemplate, never()).hasKey("jwt:blacklist:" + tokenId);
+    }
+
+    private UserTokenInterceptor localTokenInterceptor() {
+        return new UserTokenInterceptor(tokenService, GATEWAY_TOKEN, true);
+    }
+
+    private UserTokenInterceptor gatewayOnlyInterceptor() {
+        return new UserTokenInterceptor(tokenService, GATEWAY_TOKEN, false);
     }
 
     private String token(String tokenId, Long userId) {

@@ -83,15 +83,3 @@ CREATE TABLE IF NOT EXISTS file_upload_record (
     UNIQUE KEY uk_upload_hash (user_id, biz_type, file_hash, file_ext),
     INDEX idx_upload_user_time (user_id, create_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='文件上传记录表';
-
-CREATE TABLE IF NOT EXISTS event_message (
-    id              BIGINT NOT NULL COMMENT '主键(雪花算法)',
-    topic           VARCHAR(64) NOT NULL COMMENT 'MQ Topic',
-    event_key       VARCHAR(128) NOT NULL COMMENT '事件幂等键',
-    payload         JSON NOT NULL COMMENT '事件体',
-    status          TINYINT NOT NULL DEFAULT 0 COMMENT '0待投递 1已投递 2失败',
-    retry_count     TINYINT NOT NULL DEFAULT 0 COMMENT '重试次数',
-    create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_event (topic, event_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='本地消息表(Outbox)';

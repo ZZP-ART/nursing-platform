@@ -20,8 +20,6 @@ spring:
     nacos:
       discovery:
         server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
-  kafka:
-    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
   servlet:
     multipart:
       max-file-size: 10MB
@@ -35,6 +33,10 @@ mybatis:
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 nursing:
+  auth:
+    allow-local-token-validation: ${NURSING_ALLOW_LOCAL_TOKEN_VALIDATION:false}
+  gateway:
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:}
   jwt:
     expire-seconds: 604800
     secret: ${NURSING_JWT_SECRET:}

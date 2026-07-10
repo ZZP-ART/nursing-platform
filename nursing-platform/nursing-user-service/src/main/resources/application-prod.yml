@@ -1,10 +1,5 @@
-mybatis:
-  configuration:
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-
 nursing:
   sms:
-    provider: aliyun
     sign-name: ${ALIYUN_SMS_SIGN_NAME}
     templates:
       register: ${ALIYUN_SMS_TEMPLATE_REGISTER}
@@ -13,4 +8,3 @@ nursing:
     aliyun:
       access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID}
       access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET}
-      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}

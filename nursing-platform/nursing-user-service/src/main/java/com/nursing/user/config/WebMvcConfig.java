@@ -16,7 +16,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        // 只拦截需要登录态的用户接口，注册、登录、短信验证码和重置密码保持公开。
+        // Only protect login-required endpoints; register, login, SMS, and reset stay public.
         registry.addInterceptor(userTokenInterceptor)
                 .addPathPatterns(
                         "/api/v1/users/profile",
