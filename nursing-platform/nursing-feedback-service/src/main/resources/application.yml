@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: nursing-feedback-service
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:
     url: ${NURSING_FEEDBACK_DB_URL:jdbc:mysql://mysql:3306/feedback_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
     username: ${NURSING_DB_USERNAME:nursing}
@@ -14,8 +16,15 @@ spring:
       minimum-idle: 3
   cloud:
     nacos:
+      config:
+        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        username: ${NURSING_NACOS_USERNAME:}
+        password: ${NURSING_NACOS_PASSWORD:}
       discovery:
         server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        group: NURSING
     openfeign:
       client:
         config:

@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: nursing-order-service
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:
     url: ${NURSING_ORDER_DB_URL:jdbc:mysql://mysql:3306/order_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
     username: ${NURSING_DB_USERNAME:nursing}
@@ -18,8 +20,15 @@ spring:
       port: ${NURSING_REDIS_PORT:6379}
   cloud:
     nacos:
+      config:
+        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        username: ${NURSING_NACOS_USERNAME:}
+        password: ${NURSING_NACOS_PASSWORD:}
       discovery:
         server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        group: NURSING
   kafka:
     bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
     producer:

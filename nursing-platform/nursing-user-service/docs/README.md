@@ -152,6 +152,82 @@ Docker 镜像运行时基于 Eclipse Temurin 21 JRE，暴露 `8081`，健康检�
 
 数据库初始化脚本位于 `deploy/mysql/init/01_user_schema.sql`，会创建 `user_db` 及用户服务所需表。
 
+## 接口级实现细节（以当前源码为准）
+
+本节补充 Controller、DTO、Service、Mapper 和网关代码实际执行的顺序。`Result<T>` 的成功响应固定为 `code: 0`；Bean Validation 失败由 `nursing-common` 统一返回 HTTP `400`、`code: 1000`，消息为所有字段错误以分号拼接后的结果。
+
+### 认证与身份注入
+
+| 路由 | 是否受保护 | 身份来源及实际校验 |
+|---|---|---|
+| `POST /api/v1/users/sms-code` | 否 | 无需登录。 |
+| `POST /api/v1/users/register` | 否 | 无需登录。 |
+| `POST /api/v1/users/login` | 否 | 无需登录。 |
+| `POST /api/v1/users/password/reset` | 否 | 无需登录。 |
+| `POST /api/v1/users/logout` | 是 | 需网关注入有效 `X-Gateway-Token`、正整数 `X-User-Id`，或显式开启本地 JWT 校验。另必须携带 `Authorization: Bearer <JWT>`，用于定位待拉黑 Token。 |
+| `GET/PATCH /api/v1/users/profile` | 是 | 拦截器把可信身份写入请求属性 `userId`；Controller 不接受客户端传入的用户 ID。 |
+| `POST /api/v1/files/upload` | 是 | 与资料接口相同的身份注入规则。 |
+
+默认情况下，本服务拒绝未携带可信网关标识的受保护请求（HTTP `403`、`code: 1004`）。仅当 `nursing.auth.allow-local-token-validation=true` 时，才会自行校验 Bearer JWT 的签名、有效期和 Redis 黑名单。网关会先清除客户端伪造的 `X-User-Id`、`X-UserId`、`userId` 与 `X-Gateway-Token`，校验 JWT/黑名单后再注入可信请求头；重复登出允许通过网关，随后仍会执行本服务的拉黑逻辑。
+
+### `POST /api/v1/users/sms-code`
+
+请求体必须为 `phone` 和 `smsType`：手机号严格匹配 `^1\d{10}$`，类型只能是 `register`、`login` 或 `reset_password`。实现按以下顺序执行：
+
+1. 查询 `user` 表（排除逻辑删除记录）。`register` 要求用户不存在；`login`、`reset_password` 要求用户存在，否则分别返回 HTTP `422`、`2003` 或 `2004`。
+2. 解析请求 IP：取 `X-Forwarded-For` 第一个逗号分隔值；该值为空、`unknown` 或超过 45 字符时再取 `X-Real-IP`；仍不可用时取远端地址，最后使用字符串 `unknown`。这些头本身未校验请求是否来自可信代理。
+3. 一次 Redis Lua 调用原子检查并占用四类额度：`sms:rate:{type}:{phone}`、手机号自然日额度、IP 自然小时额度和 IP 自然日额度。默认分别是 60 秒、10 次/日、60 次/小时、300 次/日；日/小时键在下一个自然日/自然小时到期。间隔命中返回 HTTP `429`、`2001`，并在 `data.retryAfterSeconds` 返回该间隔键 TTL；其余额度命中返回 HTTP `429`、`2002`。
+4. 生成 `000000` 至 `999999` 的六位数字码。先向 `sms_record` 插入 `status=0` 记录：验证码列保存 BCrypt 哈希，记录请求 IP、`provider=aliyun`、创建/发送时间及到期时间。
+5. 同步调用 Aliyun `SendSms`。服务只在 HTTP 调用返回且响应体 `Code == "OK"` 时继续执行：将明文验证码写入 `sms:code:{type}:{phone}`（默认 TTL 300 秒），把记录更新为 `status=1` 并保存 `BizId`，没有 `BizId` 时保存 `RequestId`，最后才返回 HTTP `200`、`code: 0` 和 `expireSeconds`。
+
+因此接口的“成功”严格表示**阿里云已同步受理发送请求**，不表示运营商已完成投递，更不表示用户手机已经收到。该接口不是“写入消息后立即成功”的异步投递模型。
+
+阿里云返回非 `OK`、非超时异常时，记录被标为 `status=2`，仅删除同手机号同类型的间隔键，手机号/IP 的已占用计数不会回滚；接口返回 HTTP `500`、`2005`。连接/读取超时或其它被识别为 timeout 的异常会标为 `status=5`（结果未知）并返回同一错误，但保留所有额度，避免在供应商实际上已受理时重复发送。短信签名、AccessKey 缺失会阻止 `AliyunSmsSender` Bean 初始化，模板缺失会在发送前抛出异常。数据库中的 `status=4` 仅是表结构预留值，当前没有定时任务将过期记录更新为该值。
+
+验证码校验由注册、短信登录和重置密码内部调用，而不是独立 HTTP 接口：
+
+- 从 Redis 明文键读取验证码；键不存在即 HTTP `400`、`2007`。
+- 错误计数使用 `sms:verify:fail:{type}:{phone}`，首次失败时 TTL 与验证码剩余 TTL 对齐。当前实现在比较验证码**前**检查计数：前五次错误均返回 `2006` 并累加；第六次请求发现计数已达到默认上限 5，删除验证码键并返回 `2006`。该分支不会显式删除错误计数键，错误计数会继续按原 TTL 自行过期。
+- 验证成功时删除验证码键和错误计数键，并把同手机号、同类型、`status=1` 且 `send_time` 最新的一条短信记录更新为 `status=3`、写入 `verify_time`。该更新不是按 Redis 验证码对应的记录 ID 进行。
+
+### `POST /api/v1/users/register`
+
+请求体为 `phone`、`smsCode`、`password`，可选 `nickname`。验证码必须六位；密码必须 8-32 个字符并同时包含字母和数字；昵称提供时长度必须为 2-16。事务内先查手机号、再校验 `register` 验证码，然后写入 `user`：Snowflake ID、BCrypt 密码、`gender=0`、`status=0`、`is_deleted=0`、`version=0`。未提供昵称时写入 `用户` 加手机号后四位。数据库唯一键竞争会转换为 HTTP `409`、`2008`。
+
+插入成功后立即签发 JWT 并返回 HTTP `201`。JWT 使用 HS256，包含 `jti`、`sub`、`userId`、`phone`、签发时间和过期时间；默认有效期 604800 秒。签发同时把原始 JWT 写入 `user_token`，并写入 Redis `user:token:{userId}:{tokenId}`，TTL 与 JWT 有效期一致。注册流程当前不写 `user.register_ip`。
+
+### `POST /api/v1/users/login`
+
+请求体要求 `phone` 和 `loginMode`；`loginMode` 只能为 `password` 或 `sms`。密码模式还必须传非空 `password`，短信模式还必须传非空六位 `smsCode`。服务先查询用户并确认 `status != 1`；不存在返回 HTTP `422`、`2004`，禁用返回 HTTP `422`、`2011`。密码模式使用 BCrypt 比对失败返回 HTTP `400`、`2010`；短信模式校验 `login` 类型验证码。
+
+认证成功后更新 `user.last_login_time` 和 `update_time`，并按注册接口相同规则签发和持久化一个新 JWT，返回 HTTP `200`。响应中的用户手机号会掩码为前三位加 `****` 加后四位；不返回密码或明文身份证号。
+
+### `POST /api/v1/users/logout`
+
+Controller 直接从 `Authorization` 头取得 Bearer Token 并解析 JWT；格式错误、签名无效或过期时返回 HTTP `401`、`1002`。对未过期 Token，将 `jti` 写入 Redis `jwt:blacklist:{tokenId}`，值为 `1`，TTL 为剩余有效期。登出不删除 `user_token` 表记录，也不撤销同一用户的其它 Token。已过期 Token 没有可写入的黑名单 TTL。
+
+### `POST /api/v1/users/password/reset`
+
+请求体为 `phone`、六位 `smsCode`、`newPassword`；新密码使用与注册一致的 8-32 位字母加数字规则。事务内查询用户，校验 `reset_password` 验证码，拒绝与 BCrypt 旧密码相同的新密码（HTTP `400`、`2012`），随后只更新密码哈希和更新时间。该流程不会拉黑或删除历史 JWT，因此已签发且未过期的 Token 在当前实现中仍可继续使用。
+
+### `GET /api/v1/users/profile`
+
+从受保护请求的 `userId` 查询未逻辑删除用户；不存在返回 HTTP `401`、`1002`，禁用用户返回 HTTP `422`、`2011`。成功返回掩码手机号、昵称、头像、性别、状态、资料版本、最后登录时间、创建时间和掩码身份证号。身份证号存储值若以 `enc:v1:` 开头，会先以 AES-256-GCM 解密，再返回前三位、11 个星号和后四位。
+
+### `PATCH /api/v1/users/profile`
+
+请求体必须有非负 `version`；`nickname` 传入时长度为 2-16，`avatar` 最大 256 字符，`gender` 为 0-2，`idCard` 传入时长度为 18。服务还会校验身份证号的日期格式和校验位，失败返回 HTTP `422`、`2013`。非空身份证号以随机 12 字节 IV 的 AES-256-GCM 加密为 `enc:v1:{base64-IV}:{base64-ciphertext}` 后入库；生产环境未配置 32 字节密钥将启动失败。
+
+更新以 `id + version + is_deleted=0` 为条件，并将版本加一。版本不同但请求中**实际提供的字段**都与当前值一致时，直接返回当前资料，视为幂等重试；版本相同且内容相同也不执行更新。其余版本冲突返回 HTTP `409`、`2016`。更新竞争失败后会重新读取并以同样规则判断是否已被并发请求写成相同内容。
+
+### `POST /api/v1/files/upload`
+
+这是 multipart 接口，要求 `Idempotent-Key` 请求头、`file` 和 `bizType` 表单字段。`Idempotent-Key` 不能为空且最长 64 字符；`bizType` 只允许 `avatar`、`review_image`、`complaint_image`。文件不能为空，最大 10 MiB；扩展名只允许 `jpg`、`jpeg`、`png`、`gif`、`mp4`。若请求带 `Content-Type`，它必须分别精确匹配 `image/jpeg`、`image/png`、`image/gif` 或 `video/mp4`；未提供 Content-Type 时，仅按扩展名通过。
+
+服务将文件流写入 `{uploadDir}/.tmp/{userId}` 并计算 SHA-256，再以 `fu:{userId}:{Idempotent-Key}` 创建 24 小时的 `idempotent_record(status=0)`。已存在同键记录会加锁读取：仍在处理中或找不到关联上传记录时返回 HTTP `409`、`2018`；同键但用户、业务类型、哈希、扩展名或大小任一不同则返回 HTTP `409`、`2017`；完全相同则直接返回原上传结果。
+
+新请求会先按 `(userId, bizType, sha256, extension)` 查重；命中则复用已有记录。未命中时把文件移动到 `{uploadDir}/{bizType}/{userId}/{hash前两位}/{sha256}.{ext}`，生成 `fileUrl`，写入 `file_upload_record`，再把幂等记录更新为完成并关联上传记录 ID。无论成功或失败都会尽力删除暂存文件；但事务无法与文件系统移动组成原子提交，且 `idempotent_record.expire_time` 目前没有源码内清理任务。
+
 ## 开发与维护注意事项
 
 - 接口文档应以 Controller、DTO、Service、Mapper 和 SQL 脚本为准，旧计划文档不能直接作为实现依据。

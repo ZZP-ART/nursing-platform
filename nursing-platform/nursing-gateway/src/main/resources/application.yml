@@ -6,6 +6,8 @@ spring:
     web-application-type: reactive
   application:
     name: nursing-gateway
+  config:
+    import: optional:nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   cloud:
     gateway:
       routes:
@@ -26,8 +28,15 @@ spring:
           predicates:
             - Path=/api/v1/reviews/**,/api/v1/complaints/**
     nacos:
+      config:
+        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        username: ${NURSING_NACOS_USERNAME:}
+        password: ${NURSING_NACOS_PASSWORD:}
       discovery:
         server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        group: NURSING
   data:
     redis:
       host: ${NURSING_REDIS_HOST:redis}

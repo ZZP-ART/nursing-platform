@@ -4,26 +4,28 @@ server:
 spring:
   application:
     name: nursing-user-service
+  config:
+    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:
-    url: ${NURSING_USER_DB_URL:jdbc:mysql://mysql:3306/user_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
-    username: ${NURSING_DB_USERNAME:nursing}
-    password: ${NURSING_DB_PASSWORD:}
+    url: ${NURSING_USER_DB_URL}
+    username: ${NURSING_DB_USERNAME}
+    password: ${NURSING_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 20
-      minimum-idle: 5
   data:
     redis:
-      host: ${NURSING_REDIS_HOST:redis}
-      port: ${NURSING_REDIS_PORT:6379}
+      host: ${NURSING_REDIS_HOST}
+      port: ${NURSING_REDIS_PORT}
   cloud:
     nacos:
+      config:
+        server-addr: ${NURSING_NACOS_ADDR}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        username: ${NURSING_NACOS_USERNAME:}
+        password: ${NURSING_NACOS_PASSWORD:}
       discovery:
-        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
-  servlet:
-    multipart:
-      max-file-size: 10MB
-      max-request-size: 20MB
+        server-addr: ${NURSING_NACOS_ADDR}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        group: NURSING
 
 mybatis:
   mapper-locations: classpath:mapper/*.xml
@@ -36,34 +38,17 @@ nursing:
   auth:
     allow-local-token-validation: ${NURSING_ALLOW_LOCAL_TOKEN_VALIDATION:false}
   gateway:
-    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:}
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}
   jwt:
-    expire-seconds: 604800
-    secret: ${NURSING_JWT_SECRET:}
+    secret: ${NURSING_JWT_SECRET}
   security:
-    id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY:}
+    id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY}
   sms:
-    provider: aliyun
-    rate-limit-seconds: 60
-    phone-daily-limit: 10
-    ip-hourly-limit: 60
-    ip-daily-limit: 300
-    verify-max-attempts: 5
-    expire-seconds: 300
-    sign-name: ${ALIYUN_SMS_SIGN_NAME:}
+    sign-name: ${ALIYUN_SMS_SIGN_NAME}
     templates:
-      register: ${ALIYUN_SMS_TEMPLATE_REGISTER:}
-      login: ${ALIYUN_SMS_TEMPLATE_LOGIN:}
-      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD:}
+      register: ${ALIYUN_SMS_TEMPLATE_REGISTER}
+      login: ${ALIYUN_SMS_TEMPLATE_LOGIN}
+      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD}
     aliyun:
-      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID:}
-      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET:}
-      endpoint: ${ALIYUN_SMS_ENDPOINT:dysmsapi.aliyuncs.com}
-      connect-timeout-millis: ${ALIYUN_SMS_CONNECT_TIMEOUT_MILLIS:3000}
-      read-timeout-millis: ${ALIYUN_SMS_READ_TIMEOUT_MILLIS:5000}
-  file:
-    upload-dir: ${NURSING_UPLOAD_DIR:uploads}
-    public-base-url: ${NURSING_FILE_PUBLIC_BASE_URL:http://gateway:8080/uploads}
-  snowflake:
-    worker-id: 1
-    datacenter-id: 1
+      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID}
+      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET}
