@@ -50,10 +50,6 @@ ON DUPLICATE KEY UPDATE content = @content, md5 = MD5(@content), type = 'yaml', 
 SET @content = 'logging:
   level:
     com.nursing: INFO
-nursing:
-  snowflake:
-    worker-id: 2
-    datacenter-id: 1
 ';
 INSERT INTO config_info (data_id, group_id, content, md5, type, tenant_id)
 VALUES ('nursing-catalog-service-dev.yaml', 'NURSING', @content, MD5(@content), 'yaml', '')

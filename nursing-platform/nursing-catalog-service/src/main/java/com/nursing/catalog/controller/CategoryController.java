@@ -1,6 +1,6 @@
 package com.nursing.catalog.controller;
 
-import com.nursing.catalog.dto.vo.CategoryTreeVO;
+import com.nursing.catalog.dto.response.CategoryTreeResponse;
 import com.nursing.catalog.service.CategoryService;
 import com.nursing.common.result.Result;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +17,7 @@ public class CategoryController {
     private final CategoryService categoryService;
 
     @GetMapping
-    public Result<List<CategoryTreeVO>> listCategories() {
+    public Result<List<CategoryTreeResponse>> listCategories() {
         return Result.success(categoryService.buildCategoryTree());
     }
 }

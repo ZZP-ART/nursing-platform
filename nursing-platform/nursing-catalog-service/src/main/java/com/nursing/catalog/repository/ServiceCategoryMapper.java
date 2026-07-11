@@ -10,7 +10,7 @@ import java.util.List;
 public interface ServiceCategoryMapper {
     List<ServiceCategory> selectListVisible();
 
-    List<ServiceCategory> selectByParentId(@Param("parentId") Long parentId);
-
     ServiceCategory selectVisibleById(@Param("id") Long id);
+
+    List<Long> selectVisibleDescendantIds(@Param("pathPrefix") String pathPrefix);
 }

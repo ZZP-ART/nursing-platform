@@ -32,9 +32,12 @@
      service_item_id BIGINT NOT NULL COMMENT '服务项目ID',
      service_spec_id BIGINT NOT NULL COMMENT '规格ID',
      service_item_name VARCHAR(128) COMMENT '服务名称(快照)',
+     category_name   VARCHAR(64) COMMENT '服务分类名称(快照)',
      spec_name       VARCHAR(64) COMMENT '规格名称(快照)',
      spec_price      DECIMAL(10,2) COMMENT '售价(快照)',
      spec_duration   INT COMMENT '服务时长(快照)',
+     quantity        INT NOT NULL DEFAULT 1 COMMENT '下单数量(快照)',
+     catalog_snapshot_version INT NOT NULL DEFAULT 1 COMMENT '目录快照版本',
      -- 地址快照
      address_id      BIGINT COMMENT '地址ID',
      receiver_name   VARCHAR(32) COMMENT '收件人(快照)',

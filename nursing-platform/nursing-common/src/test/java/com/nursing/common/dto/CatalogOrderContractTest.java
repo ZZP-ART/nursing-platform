@@ -13,6 +13,8 @@ class CatalogOrderContractTest {
         String json = """
                 {
                   "itemId": 201,
+                  "categoryId": 101,
+                  "categoryName": "康复护理",
                   "name": "上门护理",
                   "status": 1,
                   "specs": [
@@ -24,6 +26,8 @@ class CatalogOrderContractTest {
         ServiceItemDTO item = objectMapper.readValue(json, ServiceItemDTO.class);
 
         assertThat(item.getId()).isEqualTo(201L);
+        assertThat(item.getCategoryId()).isEqualTo(101L);
+        assertThat(item.getCategoryName()).isEqualTo("康复护理");
         assertThat(item.getSpecs()).hasSize(1);
         assertThat(item.getSpecs().getFirst().getId()).isEqualTo(301L);
     }

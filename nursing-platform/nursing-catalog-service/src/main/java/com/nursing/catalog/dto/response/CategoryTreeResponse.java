@@ -1,4 +1,4 @@
-package com.nursing.catalog.dto.vo;
+package com.nursing.catalog.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
@@ -7,7 +7,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Data
-public class CategoryTreeVO {
+public class CategoryTreeResponse {
     private Long categoryId;
     private Long parentId;
     private String name;
@@ -16,5 +16,5 @@ public class CategoryTreeVO {
     private Integer status;
 
     @JsonInclude(JsonInclude.Include.NON_EMPTY)
-    private List<CategoryTreeVO> children = new ArrayList<>();
+    private List<CategoryTreeResponse> children = new ArrayList<>();
 }

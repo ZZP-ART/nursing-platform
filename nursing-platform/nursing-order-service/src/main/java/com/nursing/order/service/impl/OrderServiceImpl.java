@@ -293,9 +293,13 @@ public class OrderServiceImpl implements IOrderService {
         order.setServiceItemId(request.getServiceItemId());
         order.setServiceSpecId(request.getServiceSpecId());
         order.setServiceItemName(item.getName());
+        order.setCategoryName(item.getCategoryName());
         order.setSpecName(spec.getName());
         order.setSpecPrice(spec.getPrice());
         order.setSpecDuration(spec.getDuration());
+        // The current API accepts one spec per order; retain the explicit quantity snapshot for future order lines.
+        order.setQuantity(1);
+        order.setCatalogSnapshotVersion(1);
         order.setAddressId(address.getId());
         order.setReceiverName(address.getReceiverName());
         order.setReceiverPhone(address.getReceiverPhone());

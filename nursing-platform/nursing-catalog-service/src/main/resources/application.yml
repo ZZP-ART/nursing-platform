@@ -5,28 +5,21 @@ spring:
   application:
     name: nursing-catalog-service
   config:
-    import: optional:nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
+    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:
-    url: ${NURSING_CATALOG_DB_URL:jdbc:mysql://mysql:3306/catalog_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
-    username: ${NURSING_DB_USERNAME:nursing}
-    password: ${NURSING_DB_PASSWORD:}
+    url: ${NURSING_CATALOG_DB_URL}
+    username: ${NURSING_DB_USERNAME}
+    password: ${NURSING_DB_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 3
-  data:
-    redis:
-      host: ${NURSING_REDIS_HOST:redis}
-      port: ${NURSING_REDIS_PORT:6379}
   cloud:
     nacos:
       config:
-        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        server-addr: ${NURSING_NACOS_ADDR}
         namespace: ${NURSING_NACOS_NAMESPACE:}
         username: ${NURSING_NACOS_USERNAME:}
         password: ${NURSING_NACOS_PASSWORD:}
       discovery:
-        server-addr: ${NURSING_NACOS_ADDR:nacos:8848}
+        server-addr: ${NURSING_NACOS_ADDR}
         namespace: ${NURSING_NACOS_NAMESPACE:}
         group: NURSING
 
@@ -36,8 +29,3 @@ mybatis:
   configuration:
     map-underscore-to-camel-case: true
     log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-
-nursing:
-  snowflake:
-    worker-id: 2
-    datacenter-id: 1

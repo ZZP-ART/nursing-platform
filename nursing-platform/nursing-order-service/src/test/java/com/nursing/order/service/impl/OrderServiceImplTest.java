@@ -24,6 +24,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import org.mockito.ArgumentCaptor;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -57,7 +58,12 @@ class OrderServiceImplTest {
         OrderCreateResponse response = service.createOrder(10001L, "pt-ok", request());
 
         assertThat(response.orderId()).isEqualTo(90001L);
-        verify(orderMapper).insert(any());
+        ArgumentCaptor<com.nursing.order.entity.OrderHeader> orderCaptor =
+                ArgumentCaptor.forClass(com.nursing.order.entity.OrderHeader.class);
+        verify(orderMapper).insert(orderCaptor.capture());
+        assertThat(orderCaptor.getValue().getCategoryName()).isEqualTo("康复护理");
+        assertThat(orderCaptor.getValue().getQuantity()).isEqualTo(1);
+        assertThat(orderCaptor.getValue().getCatalogSnapshotVersion()).isEqualTo(1);
         verify(logMapper).insert(any());
         verify(idempotentService).complete("pt-ok", 90001L);
     }
@@ -93,6 +99,8 @@ class OrderServiceImplTest {
         spec.setStatus(1);
         ServiceItemDTO item = new ServiceItemDTO();
         item.setId(201L);
+        item.setCategoryId(101L);
+        item.setCategoryName("康复护理");
         item.setName("上门护理");
         item.setStatus(1);
         item.setSpecs(List.of(spec));

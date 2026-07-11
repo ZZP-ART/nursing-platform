@@ -4,7 +4,9 @@
  
 CREATE TABLE IF NOT EXISTS service_category (
     id              BIGINT NOT NULL COMMENT '分类ID(雪花算法)',
-    parent_id       BIGINT DEFAULT 0 COMMENT '父分类ID(0表示顶级)',
+    parent_id       BIGINT NOT NULL DEFAULT 0 COMMENT '父分类ID(0表示顶级)',
+    path            VARCHAR(255) NOT NULL COMMENT '物化路径，如/101/111/',
+    level           TINYINT UNSIGNED NOT NULL COMMENT '分类层级，顶级为1',
     name            VARCHAR(64) NOT NULL COMMENT '分类名称',
     icon            VARCHAR(256) COMMENT '分类图标URL',
     sort_order      INT DEFAULT 0 COMMENT '排序',
@@ -13,7 +15,8 @@ CREATE TABLE IF NOT EXISTS service_category (
     create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
-    INDEX idx_parent (parent_id)
+    UNIQUE KEY uk_path (path),
+    INDEX idx_parent_visible_sort (parent_id, status, is_deleted, sort_order, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务分类表';
  
  CREATE TABLE IF NOT EXISTS service_item (
@@ -28,7 +31,8 @@ CREATE TABLE IF NOT EXISTS service_category (
      create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
      update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
      PRIMARY KEY (id),
-     INDEX idx_category (category_id)
+     INDEX idx_item_category_visible_sort (category_id, status, is_deleted, sort_order, id),
+     INDEX idx_item_visible_sort (status, is_deleted, sort_order, id)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务项目表';
  
  CREATE TABLE IF NOT EXISTS service_spec (
@@ -43,35 +47,36 @@ CREATE TABLE IF NOT EXISTS service_category (
      create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
      update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
      PRIMARY KEY (id),
-     INDEX idx_service_item (service_item_id)
+     INDEX idx_spec_item_visible_price (service_item_id, status, is_deleted, price)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务规格表';
- 
+
 -- ========== 种子数据 ==========
 -- 服务分类
- INSERT INTO service_category (id, parent_id, name, icon, sort_order, status)
+ INSERT INTO service_category (id, parent_id, path, level, name, icon, sort_order, status)
 VALUES
-    (101, 0, '康复护理', NULL, 1, 1),
-    (102, 0, '健康体检', NULL, 2, 1),
-    (103, 0, '家政护理', NULL, 3, 1),
-    (104, 0, '中医理疗', NULL, 4, 1),
-    (111, 101, '术后康复', NULL, 1, 1),
-    (112, 101, '老年康复', NULL, 2, 1),
-    (121, 102, '上门体检', NULL, 1, 1),
-    (131, 103, '居家照护', NULL, 1, 1),
-    (141, 104, '推拿艾灸', NULL, 1, 1);
+    (101, 0, '/101/', 1, '康复护理', NULL, 1, 1),
+    (102, 0, '/102/', 1, '健康体检', NULL, 2, 1),
+    (103, 0, '/103/', 1, '家政护理', NULL, 3, 1),
+    (104, 0, '/104/', 1, '中医理疗', NULL, 4, 1),
+    (111, 101, '/101/111/', 2, '术后康复', NULL, 1, 1),
+    (112, 101, '/101/112/', 2, '老年康复', NULL, 2, 1),
+    (113, 101, '/101/113/', 2, '康复理疗', NULL, 3, 1),
+    (121, 102, '/102/121/', 2, '上门体检', NULL, 1, 1),
+    (131, 103, '/103/131/', 2, '居家照护', NULL, 1, 1),
+    (141, 104, '/104/141/', 2, '推拿艾灸', NULL, 1, 1);
  
  -- 服务项目
  INSERT INTO service_item (id, category_id, name, description, status, sort_order)
  VALUES
-     (201, 101, '上门康复推拿', '专业康复师上门推拿服务，适用于术后恢复、慢性疼痛缓解等场景。', 1, 1),
-     (202, 101, '术后康复护理', '针对术后患者提供专业的康复护理服务，含伤口护理、康复指导。', 1, 2),
-     (203, 101, '老年康复训练', '针对老年人的定制化康复训练方案，改善行动能力与生活质量。', 1, 3),
-     (204, 102, '常规体检套餐', '上门体检服务，含血压血糖检测、心电图等基础项目。', 1, 1),
-     (205, 102, '全身体检筛查', '全面体检涵盖生化检验、影像检查等，结果由专业医生解读。', 1, 2),
-     (206, 103, '老人陪护服务', '专业护工/护理员上门陪护，含生活照料、心理陪伴。', 1, 1),
-     (207, 103, '居家护理服务', '基础护理：翻身拍背、口腔护理、排泄护理、压疮预防等。', 1, 2),
-     (208, 104, '中医推拿理疗', '资深中医师上门推拿理疗，缓解颈肩腰腿痛。', 1, 1),
-     (209, 104, '艾灸养生调理', '传统艾灸调理，适用于寒湿体质、关节疼痛等。', 1, 2);
+     (201, 113, '上门康复推拿', '专业康复师上门推拿服务，适用于术后恢复、慢性疼痛缓解等场景。', 1, 1),
+     (202, 111, '术后康复护理', '针对术后患者提供专业的康复护理服务，含伤口护理、康复指导。', 1, 2),
+     (203, 112, '老年康复训练', '针对老年人的定制化康复训练方案，改善行动能力与生活质量。', 1, 3),
+     (204, 121, '常规体检套餐', '上门体检服务，含血压血糖检测、心电图等基础项目。', 1, 1),
+     (205, 121, '全身体检筛查', '全面体检涵盖生化检验、影像检查等，结果由专业医生解读。', 1, 2),
+     (206, 131, '老人陪护服务', '专业护工/护理员上门陪护，含生活照料、心理陪伴。', 1, 1),
+     (207, 131, '居家护理服务', '基础护理：翻身拍背、口腔护理、排泄护理、压疮预防等。', 1, 2),
+     (208, 141, '中医推拿理疗', '资深中医师上门推拿理疗，缓解颈肩腰腿痛。', 1, 1),
+     (209, 141, '艾灸养生调理', '传统艾灸调理，适用于寒湿体质、关节疼痛等。', 1, 2);
  
  -- 服务规格与价格
  INSERT INTO service_spec (id, service_item_id, name, price, original_price, duration)
@@ -93,32 +98,3 @@ VALUES
      (315, 209, '艾灸调理(45分钟)', 168.00, 238.00, 45),
      (316, 209, '艾灸套餐(5次)', 720.00, 1190.00, 45);
 
--- ============================================================
--- 通用表：幂等记录（每个服务独立拥有）
--- ============================================================
-CREATE TABLE IF NOT EXISTS idempotent_record (
-    id              BIGINT NOT NULL COMMENT '主键(雪花算法)',
-    idempotent_key  VARCHAR(128) NOT NULL COMMENT '幂等键',
-    biz_type        VARCHAR(32) NOT NULL COMMENT '业务类型',
-    biz_id          BIGINT COMMENT '业务主键',
-    status          TINYINT NOT NULL DEFAULT 0 COMMENT '0处理中 1已完成',
-    expire_time     DATETIME NOT NULL COMMENT '过期时间',
-    create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_key (idempotent_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='幂等记录表';
-
--- ============================================================
--- 通用表：本地消息表 Outbox（每个服务独立拥有）
--- ============================================================
-CREATE TABLE IF NOT EXISTS event_message (
-    id              BIGINT NOT NULL COMMENT '主键(雪花算法)',
-    topic           VARCHAR(64) NOT NULL COMMENT 'MQ Topic',
-    event_key       VARCHAR(128) NOT NULL COMMENT '事件幂等键',
-    payload         JSON NOT NULL COMMENT '事件体',
-    status          TINYINT NOT NULL DEFAULT 0 COMMENT '0待投递 1已投递 2失败',
-    retry_count     TINYINT NOT NULL DEFAULT 0 COMMENT '重试次数',
-    create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-    PRIMARY KEY (id),
-    UNIQUE KEY uk_event (topic, event_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='本地消息表(Outbox)';

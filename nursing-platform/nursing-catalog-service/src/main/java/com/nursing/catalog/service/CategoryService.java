@@ -1,6 +1,6 @@
 package com.nursing.catalog.service;
 
-import com.nursing.catalog.dto.vo.CategoryTreeVO;
+import com.nursing.catalog.dto.response.CategoryTreeResponse;
 import com.nursing.catalog.entity.ServiceCategory;
 import com.nursing.catalog.repository.ServiceCategoryMapper;
 import lombok.RequiredArgsConstructor;
@@ -18,24 +18,24 @@ public class CategoryService {
 
     private final ServiceCategoryMapper serviceCategoryMapper;
 
-    public List<CategoryTreeVO> buildCategoryTree() {
+    public List<CategoryTreeResponse> buildCategoryTree() {
         List<ServiceCategory> categories = serviceCategoryMapper.selectListVisible();
-        Map<Long, CategoryTreeVO> nodeMap = new LinkedHashMap<>();
+        Map<Long, CategoryTreeResponse> nodeMap = new LinkedHashMap<>();
 
         for (ServiceCategory category : categories) {
             nodeMap.put(category.getId(), toTreeNode(category));
         }
 
-        List<CategoryTreeVO> roots = new ArrayList<>();
+        List<CategoryTreeResponse> roots = new ArrayList<>();
         for (ServiceCategory category : categories) {
-            CategoryTreeVO node = nodeMap.get(category.getId());
+            CategoryTreeResponse node = nodeMap.get(category.getId());
             Long parentId = category.getParentId();
             if (parentId == null || parentId == ROOT_PARENT_ID) {
                 roots.add(node);
                 continue;
             }
 
-            CategoryTreeVO parent = nodeMap.get(parentId);
+            CategoryTreeResponse parent = nodeMap.get(parentId);
             if (parent == null) {
                 roots.add(node);
             } else {
@@ -45,14 +45,14 @@ public class CategoryService {
         return roots;
     }
 
-    private CategoryTreeVO toTreeNode(ServiceCategory category) {
-        CategoryTreeVO vo = new CategoryTreeVO();
-        vo.setCategoryId(category.getId());
-        vo.setParentId(category.getParentId());
-        vo.setName(category.getName());
-        vo.setIcon(category.getIcon());
-        vo.setSortOrder(category.getSortOrder());
-        vo.setStatus(category.getStatus());
-        return vo;
+    private CategoryTreeResponse toTreeNode(ServiceCategory category) {
+        CategoryTreeResponse response = new CategoryTreeResponse();
+        response.setCategoryId(category.getId());
+        response.setParentId(category.getParentId());
+        response.setName(category.getName());
+        response.setIcon(category.getIcon());
+        response.setSortOrder(category.getSortOrder());
+        response.setStatus(category.getStatus());
+        return response;
     }
 }

@@ -1,9 +1,9 @@
 package com.nursing.catalog.controller;
 
-import com.nursing.catalog.dto.vo.ItemDetailVO;
-import com.nursing.catalog.dto.vo.ItemPageVO;
+import com.nursing.catalog.dto.response.CursorPageResponse;
+import com.nursing.catalog.dto.response.ItemDetailResponse;
+import com.nursing.catalog.dto.response.ItemListResponse;
 import com.nursing.catalog.service.ItemService;
-import com.nursing.common.result.PageResult;
 import com.nursing.common.result.Result;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,18 +19,18 @@ public class ItemController {
     private final ItemService itemService;
 
     @GetMapping
-    public Result<PageResult<ItemPageVO>> listOrSearchItems(@RequestParam(required = false) Long categoryId,
-                                                            @RequestParam(required = false) String keyword,
-                                                            @RequestParam(required = false) Integer page,
-                                                            @RequestParam(required = false) Integer size) {
+    public Result<CursorPageResponse<ItemListResponse>> listOrSearchItems(@RequestParam(required = false) Long categoryId,
+                                                                  @RequestParam(required = false) String keyword,
+                                                                  @RequestParam(required = false) String cursor,
+                                                                  @RequestParam(required = false) Integer size) {
         if (keyword != null) {
-            return Result.success(itemService.searchItems(keyword, categoryId, page, size));
+            return Result.success(itemService.searchItems(keyword, categoryId, cursor, size));
         }
-        return Result.success(itemService.getItemPage(categoryId, page, size));
+        return Result.success(itemService.getItemPage(categoryId, cursor, size));
     }
 
     @GetMapping("/{id}")
-    public Result<ItemDetailVO> getItemDetail(@PathVariable Long id) {
+    public Result<ItemDetailResponse> getItemDetail(@PathVariable Long id) {
         return Result.success(itemService.getItemDetail(id));
     }
 }

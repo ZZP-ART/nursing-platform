@@ -75,7 +75,6 @@ nursing-order-service/
     |   |   +-- OrderPageQuery.java
     |   |   +-- CancelOrderRequest.java
     |   |   +-- PayRequest.java
-    |   |   +-- PaymentCallbackRequest.java
     |   |   +-- AddressRequest.java
     |   +-- response/
     |       +-- PrepayTokenResponse.java
@@ -102,7 +101,6 @@ nursing-common/src/main/java/com/nursing/common/feign/
 nursing-common/src/main/java/com/nursing/common/dto/
 +-- ServiceItemDTO.java
 +-- ServiceSpecDTO.java
-+-- ItemPriceDTO.java
 +-- OrderDTO.java
 ```
 

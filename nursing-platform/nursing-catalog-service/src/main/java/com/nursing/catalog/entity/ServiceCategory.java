@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 public class ServiceCategory {
     private Long id;
     private Long parentId;
+    private String path;
+    private Integer level;
     private String name;
     private String icon;
     private Integer sortOrder;

@@ -13,9 +13,12 @@ public class OrderHeader {
     private Long serviceItemId;
     private Long serviceSpecId;
     private String serviceItemName;
+    private String categoryName;
     private String specName;
     private BigDecimal specPrice;
     private Integer specDuration;
+    private Integer quantity;
+    private Integer catalogSnapshotVersion;
     private Long addressId;
     private String receiverName;
     private String receiverPhone;
@@ -46,12 +49,18 @@ public class OrderHeader {
     public void setServiceSpecId(Long serviceSpecId) { this.serviceSpecId = serviceSpecId; }
     public String getServiceItemName() { return serviceItemName; }
     public void setServiceItemName(String serviceItemName) { this.serviceItemName = serviceItemName; }
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
     public String getSpecName() { return specName; }
     public void setSpecName(String specName) { this.specName = specName; }
     public BigDecimal getSpecPrice() { return specPrice; }
     public void setSpecPrice(BigDecimal specPrice) { this.specPrice = specPrice; }
     public Integer getSpecDuration() { return specDuration; }
     public void setSpecDuration(Integer specDuration) { this.specDuration = specDuration; }
+    public Integer getQuantity() { return quantity; }
+    public void setQuantity(Integer quantity) { this.quantity = quantity; }
+    public Integer getCatalogSnapshotVersion() { return catalogSnapshotVersion; }
+    public void setCatalogSnapshotVersion(Integer catalogSnapshotVersion) { this.catalogSnapshotVersion = catalogSnapshotVersion; }
     public Long getAddressId() { return addressId; }
     public void setAddressId(Long addressId) { this.addressId = addressId; }
     public String getReceiverName() { return receiverName; }

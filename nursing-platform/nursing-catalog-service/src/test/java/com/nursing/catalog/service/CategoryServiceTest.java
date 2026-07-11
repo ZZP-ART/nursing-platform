@@ -1,6 +1,6 @@
 package com.nursing.catalog.service;
 
-import com.nursing.catalog.dto.vo.CategoryTreeVO;
+import com.nursing.catalog.dto.response.CategoryTreeResponse;
 import com.nursing.catalog.entity.ServiceCategory;
 import com.nursing.catalog.repository.ServiceCategoryMapper;
 import org.junit.jupiter.api.Test;
@@ -29,7 +29,7 @@ class CategoryServiceTest {
         ServiceCategory secondRoot = category(102L, 0L, "健康体检", 2);
         when(serviceCategoryMapper.selectListVisible()).thenReturn(List.of(root, child, secondRoot));
 
-        List<CategoryTreeVO> result = categoryService.buildCategoryTree();
+        List<CategoryTreeResponse> result = categoryService.buildCategoryTree();
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).getCategoryId()).isEqualTo(101L);

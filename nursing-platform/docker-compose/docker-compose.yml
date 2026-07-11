@@ -10,6 +10,7 @@ services:
     volumes:
       - ./mysql/init:/docker-entrypoint-initdb.d
       - ../nursing-user-service/deploy/mysql/init/01_user_schema.sql:/docker-entrypoint-initdb.d/01_user_schema.sql:ro
+      - ../nursing-catalog-service/deploy/mysql/init/02_catalog_schema.sql:/docker-entrypoint-initdb.d/02_catalog_schema.sql:ro
       - mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}"]

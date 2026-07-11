@@ -64,8 +64,6 @@ nursing-catalog-service/
 | 类名 | 对应表 | 关键字段 |
 |------|--------|---------|
 | ServiceCategory | service_category | id, parentId, name, icon, sortOrder, status, isDeleted, createTime, updateTime |
-| ServiceItem | service_item | id, categoryId, name, description, coverImage, status, sortOrder, isDeleted, createTime, updateTime |
-| ServiceSpec | service_spec | id, serviceItemId, name, price, originalPrice, duration, status, isDeleted, createTime, updateTime |
 
 所有实体加 `@Data`（Lombok）。
 
@@ -73,12 +71,11 @@ nursing-catalog-service/
 
 | 类名 | 用途 | 说明 |
 |------|------|------|
-| CategoryTreeVO | 分类树节点 | id, name, icon, children（递归 List） |
-| ItemPageVO | 项目列表项 | id, name, coverImage, categoryId, minPrice, status |
-| ItemDetailVO | 项目详情 | id, name, description, coverImage, categoryId, specs |
-| SpecVO | 规格信息 | id, name, price, originalPrice, duration |
-| ItemQueryDTO | 项目查询参数 | categoryId（可选）, page, size |
-| ItemSearchDTO | 搜索参数 | keyword（必填）, categoryId（可选）, page, size |
+| CategoryTreeResponse | 分类树节点 | id, name, icon, children（递归 List） |
+| ItemListResponse | 项目列表项 | id, name, coverImage, categoryId, minPrice, status |
+| ItemDetailResponse | 项目详情 | id, name, description, coverImage, categoryId, specs |
+| ServiceSpecResponse | 规格信息 | id, name, price, originalPrice, duration |
+| CursorPageResponse | 游标分页响应 | list, size, hasNext, nextCursor |
 
 ### 2.4 Mapper 层（MyBatis XML）
 
@@ -89,17 +86,14 @@ nursing-catalog-service/
 | 方法 | SQL 说明 |
 |------|---------|
 | selectListVisible() | 查询所有 `status=1 AND is_deleted=0` 的分类，按 `sort_order` 排序 |
-| selectByParentId(Long parentId) | 根据 `parent_id` 查子分类 |
 
 **ServiceItemMapper**
 
 | 方法 | SQL 说明 |
 |------|---------|
-| selectPage(categoryId, offset, limit) | 分页查项目，支持按 `categoryId` 筛选 |
-| count(categoryId) | 计数 |
+| selectPage(categoryIds, cursorSortOrder, cursorId, limit) | 游标查询项目，支持按分类及可见后代筛选；按 `(sort_order, id)` 向后读取 |
 | selectById(Long id) | 按 ID 查项目详情 |
-| searchPage(keyword, categoryId, offset, limit) | 分页搜索，`keyword` 模糊匹配 `name + description` |
-| searchCount(keyword, categoryId) | 搜索计数 |
+| searchPage(keyword, categoryIds, cursorSortOrder, cursorId, limit) | 游标搜索，`keyword` 模糊匹配 `name + description`，按 `(sort_order, id)` 向后读取 |
 
 **ServiceSpecMapper**
 
@@ -107,13 +101,13 @@ nursing-catalog-service/
 |------|---------|
 | selectByItemId(Long serviceItemId) | 查询某个服务的所有规格（`status=1, is_deleted=0`） |
 
-> **分页方式**：使用原生 MyBatis + `LIMIT #{offset}, #{limit}` 手动分页，不引入 PageHelper。
+> **分页方式**：使用原生 MyBatis 游标分页，以 `(sort_order, id)` 作为键集条件，查询 `size + 1` 条记录生成 `nextCursor`，不执行 `OFFSET` 和总数计数。
 
 ### 2.5 Service 层
 
 **CategoryService**
 
-`buildCategoryTree(): List<CategoryTreeVO>`
+`buildCategoryTree(): List<CategoryTreeResponse>`
 
 - 查询所有 `status=1` 且 `is_deleted=0` 的分类
 - 按 `parent_id` 构建内存树
@@ -121,20 +115,20 @@ nursing-catalog-service/
 
 **ItemService**
 
-`getItemPage(categoryId, page, size): PageResult<ItemPageVO>`
+`getItemPage(categoryId, cursor, size): CursorPageResponse<ItemListResponse>`
 
 - 校验分页参数
 - 调用 mapper 查询 + 计数
 - 组装 `PageResult`
 - `categoryId` 为 `null` 时返回所有项目
 
-`getItemDetail(id): ItemDetailVO`
+`getItemDetail(id): ItemDetailResponse`
 
 - 查 `service_item` + 查 `service_spec`
-- 组装成 `ItemDetailVO`
+- 组装成 `ItemDetailResponse`
 - id 无效时抛出 `BusinessException(NOT_FOUND, "服务项目不存在")`
 
-`searchItems(keyword, categoryId, page, size): PageResult<ItemPageVO>`
+`searchItems(keyword, categoryId, cursor, size): CursorPageResponse<ItemListResponse>`
 
 - 校验 `keyword` 非空
 - mapper 模糊搜索（匹配 `name` 和 `description`）
@@ -146,15 +140,14 @@ nursing-catalog-service/
 
 | 方法 | 路径 | 参数 | 响应 |
 |------|------|------|------|
-| GET | /api/v1/categories | 无 | Result<List<CategoryTreeVO>> |
+| GET | /api/v1/categories | 无 | Result<List<CategoryTreeResponse>> |
 
 **ItemController**，类级 `@RequestMapping("/api/v1/items")`
 
 | 方法 | 路径 | 参数 | 响应 |
 |------|------|------|------|
-| GET | /api/v1/items | categoryId(opt), page(def=1), size(def=20) | Result<PageResult<ItemPageVO>> |
-| GET | /api/v1/items/{id} | id(path) | Result<ItemDetailVO> |
-| GET | /api/v1/items/search | keyword(req), categoryId(opt), page(def=1), size(def=20) | Result<PageResult<ItemPageVO>> |
+| GET | /api/v1/items | categoryId(opt), keyword(opt), cursor(opt), size(def=20) | Result<CursorPageResponse<ItemListResponse>> |
+| GET | /api/v1/items/{id} | id(path) | Result<ItemDetailResponse> |
 
 **路径说明**：`/items` 和 `/items/search` 在 Spring 中不会冲突，`/search` 是精确路径，优先级更高。
 
@@ -168,7 +161,7 @@ order-service 在下单时通过 Feign 调用 `GET /api/v1/items/{id}` 获取最
 - `price` 字段名保持为 `price`，类型为 `BigDecimal`
 - 不随意删除现有字段
 
-提供 `ItemPriceDTO` 作为参考结构（实际 Feign Client 定义在调用方侧）。
+Feign 调用方使用 `nursing-common` 中的 `ServiceItemDTO` 与 `ServiceSpecDTO` 反序列化该详情响应。
 
 ### 2.8 Bean 配置
 
@@ -195,20 +188,13 @@ nursing-catalog-service/src/main/java/com/nursing/catalog/
 |   +-- ServiceSpecMapper.java
 +-- entity/
 |   +-- ServiceCategory.java
-|   +-- ServiceItem.java
-|   +-- ServiceSpec.java
 +-- dto/
-    +-- vo/
-    |   +-- CategoryTreeVO.java
-    |   +-- ItemPageVO.java
-    |   +-- ItemDetailVO.java
-    |   +-- SpecVO.java
-    +-- query/
-        +-- ItemQueryDTO.java
-        +-- ItemSearchDTO.java
-
-nursing-common/src/main/java/com/nursing/common/dto/
-+-- ItemPriceDTO.java
+    +-- response/
+        +-- CategoryTreeResponse.java
+        +-- ItemListResponse.java
+        +-- ItemDetailResponse.java
+        +-- ServiceSpecResponse.java
+        +-- CursorPageResponse.java
 
 nursing-catalog-service/src/main/resources/
 +-- mapper/
@@ -216,7 +202,7 @@ nursing-catalog-service/src/main/resources/
     +-- ServiceItemMapper.xml
     +-- ServiceSpecMapper.xml
 
-docker-compose/mysql/init/
+nursing-catalog-service/deploy/mysql/init/
 +-- 02_catalog_schema.sql                     # + parent_id 列
 ```
 
@@ -332,14 +318,14 @@ Response: 同项目列表分页结果
 | 决策 | 选择 | 理由 |
 |------|------|------|
 | ORM | 原生 MyBatis（XML Mapper） | 与项目骨架一致，保持轻量 |
-| 分页方案 | 手动 LIMIT offset/limit | 不引入 PageHelper，catalog 数据量极小 |
+| 分页方案 | 键集游标分页 | 以 `(sort_order, id)` 续页，避免深分页扫描和总数统计 |
 | ID 生成 | SnowflakeIdWorker | 与 DDL（BIGINT NOT NULL）一致 |
 | 分类树构建 | 一次性查询 + 内存递归 | 分类数据极少（< 50 条），无需多次查库 |
 | `parent_id` 默认值 | 0 表示顶级 | 避免 `NULL` 带来的 SQL 三值逻辑问题 |
 | 搜索实现 | LIKE `%keyword%` | MVP 阶段数据量小，后续可升级 ES |
 | 排序规则 | 分类：`sort_order`；项目：`sort_order`；规格：`id` | 与 UI 展示需求一致 |
 | 缓存 | 不做 Redis 缓存 | 接口免鉴权 + 数据量小 + 低频更新 |
-| 列表/搜索共用 VO | ItemPageVO 同时作为列表和搜索返回 | 两个 API 结构完全一致 |
+| 列表/搜索共用响应对象 | ItemListResponse 同时作为列表和搜索返回 | 两个 API 结构完全一致 |
 | 下单接口稳定性 | `items/{id}` 保持字段稳定 | order-service 通过 Feign 获取最新价格 |
 
 ---

@@ -11,9 +11,12 @@
         <result column="service_item_id" property="serviceItemId"/>
         <result column="service_spec_id" property="serviceSpecId"/>
         <result column="service_item_name" property="serviceItemName"/>
+        <result column="category_name" property="categoryName"/>
         <result column="spec_name" property="specName"/>
         <result column="spec_price" property="specPrice"/>
         <result column="spec_duration" property="specDuration"/>
+        <result column="quantity" property="quantity"/>
+        <result column="catalog_snapshot_version" property="catalogSnapshotVersion"/>
         <result column="address_id" property="addressId"/>
         <result column="receiver_name" property="receiverName"/>
         <result column="receiver_phone" property="receiverPhone"/>
@@ -31,7 +34,7 @@
 
     <sql id="BaseColumns">
         id, order_no, user_id, source, version, service_item_id, service_spec_id,
-        service_item_name, spec_name, spec_price, spec_duration, address_id,
+        service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
         receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
         total_amount, status, remark, cancel_reason, is_deleted, create_time, update_time
     </sql>
@@ -39,12 +42,12 @@
     <insert id="insert" parameterType="com.nursing.order.entity.OrderHeader">
         INSERT INTO order_header (
             id, order_no, user_id, source, version, service_item_id, service_spec_id,
-            service_item_name, spec_name, spec_price, spec_duration, address_id,
+            service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
             receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
             total_amount, status, remark, cancel_reason, is_deleted
         ) VALUES (
             #{id}, #{orderNo}, #{userId}, #{source}, #{version}, #{serviceItemId}, #{serviceSpecId},
-            #{serviceItemName}, #{specName}, #{specPrice}, #{specDuration}, #{addressId},
+            #{serviceItemName}, #{categoryName}, #{specName}, #{specPrice}, #{specDuration}, #{quantity}, #{catalogSnapshotVersion}, #{addressId},
             #{receiverName}, #{receiverPhone}, #{addressDetail}, #{serviceDate}, #{serviceTimeSlot},
             #{totalAmount}, #{status}, #{remark}, #{cancelReason}, COALESCE(#{isDeleted}, 0)
         )

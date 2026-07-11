@@ -7,8 +7,31 @@
     <sql id="VisibleItemWhere">
         si.status = 1
         AND si.is_deleted = 0
-        <if test="categoryId != null">
-            AND si.category_id = #{categoryId}
+        AND sc.status = 1
+        AND sc.is_deleted = 0
+        AND NOT EXISTS (
+            SELECT 1
+            FROM service_category ancestor
+            WHERE (ancestor.status &lt;&gt; 1 OR ancestor.is_deleted &lt;&gt; 0)
+              AND sc.path LIKE CONCAT(ancestor.path, '%')
+        )
+    </sql>
+
+    <sql id="CategoryFilter">
+        <if test="categoryIds != null and !categoryIds.isEmpty()">
+            AND si.category_id IN
+            <foreach collection="categoryIds" item="categoryId" open="(" separator="," close=")">
+                #{categoryId}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="CursorFilter">
+        <if test="cursorSortOrder != null and cursorId != null">
+            AND (
+                si.sort_order &gt; #{cursorSortOrder}
+                OR (si.sort_order = #{cursorSortOrder} AND si.id &gt; #{cursorId})
+            )
         </if>
     </sql>
 
@@ -30,7 +53,7 @@
         ) AS min_price
     </sql>
 
-    <resultMap id="ItemPageMap" type="com.nursing.catalog.dto.vo.ItemPageVO">
+    <resultMap id="ItemPageMap" type="com.nursing.catalog.dto.response.ItemListResponse">
         <id property="itemId" column="item_id"/>
         <result property="categoryId" column="category_id"/>
         <result property="categoryName" column="category_name"/>
@@ -42,7 +65,7 @@
         <result property="minPrice" column="min_price"/>
     </resultMap>
 
-    <resultMap id="ItemDetailMap" type="com.nursing.catalog.dto.vo.ItemDetailVO">
+    <resultMap id="ItemDetailMap" type="com.nursing.catalog.dto.response.ItemDetailResponse">
         <id property="itemId" column="item_id"/>
         <result property="categoryId" column="category_id"/>
         <result property="categoryName" column="category_name"/>
@@ -58,16 +81,12 @@
         SELECT
         <include refid="ItemPageColumns"/>
         FROM service_item si
-        LEFT JOIN service_category sc ON sc.id = si.category_id
+        INNER JOIN service_category sc ON sc.id = si.category_id
         WHERE <include refid="VisibleItemWhere"/>
+        <include refid="CategoryFilter"/>
+        <include refid="CursorFilter"/>
         ORDER BY si.sort_order ASC, si.id ASC
-        LIMIT #{offset}, #{limit}
-    </select>
-
-    <select id="count" resultType="long">
-        SELECT COUNT(1)
-        FROM service_item si
-        WHERE <include refid="VisibleItemWhere"/>
+        LIMIT #{limit}
     </select>
 
     <select id="selectById" resultMap="ItemDetailMap">
@@ -82,10 +101,9 @@
             si.status,
             si.create_time
         FROM service_item si
-        LEFT JOIN service_category sc ON sc.id = si.category_id
+        INNER JOIN service_category sc ON sc.id = si.category_id
         WHERE si.id = #{id}
-          AND si.status = 1
-          AND si.is_deleted = 0
+          AND <include refid="VisibleItemWhere"/>
         LIMIT 1
     </select>
 
@@ -93,19 +111,13 @@
         SELECT
         <include refid="ItemPageColumns"/>
         FROM service_item si
-        LEFT JOIN service_category sc ON sc.id = si.category_id
+        INNER JOIN service_category sc ON sc.id = si.category_id
         WHERE <include refid="VisibleItemWhere"/>
+        <include refid="CategoryFilter"/>
+        <include refid="CursorFilter"/>
           AND (si.name LIKE CONCAT('%', #{keyword}, '%')
                OR si.description LIKE CONCAT('%', #{keyword}, '%'))
         ORDER BY si.sort_order ASC, si.id ASC
-        LIMIT #{offset}, #{limit}
-    </select>
-
-    <select id="searchCount" resultType="long">
-        SELECT COUNT(1)
-        FROM service_item si
-        WHERE <include refid="VisibleItemWhere"/>
-          AND (si.name LIKE CONCAT('%', #{keyword}, '%')
-               OR si.description LIKE CONCAT('%', #{keyword}, '%'))
+        LIMIT #{limit}
     </select>
 </mapper>

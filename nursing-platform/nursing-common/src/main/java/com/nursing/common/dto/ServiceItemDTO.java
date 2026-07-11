@@ -10,6 +10,7 @@ public class ServiceItemDTO implements Serializable {
     private Long id;
     private String name;
     private Long categoryId;
+    private String categoryName;
     private Integer status;
     private List<ServiceSpecDTO> specs;
 
@@ -21,6 +22,8 @@ public class ServiceItemDTO implements Serializable {
     public void setName(String name) { this.name = name; }
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
+    public String getCategoryName() { return categoryName; }
+    public void setCategoryName(String categoryName) { this.categoryName = categoryName; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
     public List<ServiceSpecDTO> getSpecs() { return specs; }

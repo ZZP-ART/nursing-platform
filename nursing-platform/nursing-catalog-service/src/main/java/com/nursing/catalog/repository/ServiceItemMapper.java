@@ -1,7 +1,7 @@
 package com.nursing.catalog.repository;
 
-import com.nursing.catalog.dto.vo.ItemDetailVO;
-import com.nursing.catalog.dto.vo.ItemPageVO;
+import com.nursing.catalog.dto.response.ItemDetailResponse;
+import com.nursing.catalog.dto.response.ItemListResponse;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -9,19 +9,16 @@ import java.util.List;
 
 @Mapper
 public interface ServiceItemMapper {
-    List<ItemPageVO> selectPage(@Param("categoryId") Long categoryId,
-                                @Param("offset") int offset,
+    List<ItemListResponse> selectPage(@Param("categoryIds") List<Long> categoryIds,
+                                @Param("cursorSortOrder") Integer cursorSortOrder,
+                                @Param("cursorId") Long cursorId,
                                 @Param("limit") int limit);
 
-    long count(@Param("categoryId") Long categoryId);
+    ItemDetailResponse selectById(@Param("id") Long id);
 
-    ItemDetailVO selectById(@Param("id") Long id);
-
-    List<ItemPageVO> searchPage(@Param("keyword") String keyword,
-                                @Param("categoryId") Long categoryId,
-                                @Param("offset") int offset,
+    List<ItemListResponse> searchPage(@Param("keyword") String keyword,
+                                @Param("categoryIds") List<Long> categoryIds,
+                                @Param("cursorSortOrder") Integer cursorSortOrder,
+                                @Param("cursorId") Long cursorId,
                                 @Param("limit") int limit);
-
-    long searchCount(@Param("keyword") String keyword,
-                     @Param("categoryId") Long categoryId);
 }

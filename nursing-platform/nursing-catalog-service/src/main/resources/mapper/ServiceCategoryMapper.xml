@@ -7,6 +7,8 @@
     <resultMap id="ServiceCategoryMap" type="com.nursing.catalog.entity.ServiceCategory">
         <id property="id" column="id"/>
         <result property="parentId" column="parent_id"/>
+        <result property="path" column="path"/>
+        <result property="level" column="level"/>
         <result property="name" column="name"/>
         <result property="icon" column="icon"/>
         <result property="sortOrder" column="sort_order"/>
@@ -16,29 +18,39 @@
         <result property="updateTime" column="update_time"/>
     </resultMap>
 
-    <select id="selectListVisible" resultMap="ServiceCategoryMap">
-        SELECT id, parent_id, name, icon, sort_order, status, is_deleted, create_time, update_time
-        FROM service_category
-        WHERE status = 1
-          AND is_deleted = 0
-        ORDER BY parent_id ASC, sort_order ASC, id ASC
-    </select>
+    <sql id="VisibleCategoryWhere">
+        c.status = 1
+        AND c.is_deleted = 0
+        AND NOT EXISTS (
+            SELECT 1
+            FROM service_category ancestor
+            WHERE (ancestor.status &lt;&gt; 1 OR ancestor.is_deleted &lt;&gt; 0)
+              AND c.path LIKE CONCAT(ancestor.path, '%')
+        )
+    </sql>
 
-    <select id="selectByParentId" resultMap="ServiceCategoryMap">
-        SELECT id, parent_id, name, icon, sort_order, status, is_deleted, create_time, update_time
-        FROM service_category
-        WHERE parent_id = #{parentId}
-          AND status = 1
-          AND is_deleted = 0
-        ORDER BY sort_order ASC, id ASC
+    <select id="selectListVisible" resultMap="ServiceCategoryMap">
+        SELECT c.id, c.parent_id, c.path, c.level, c.name, c.icon, c.sort_order,
+               c.status, c.is_deleted, c.create_time, c.update_time
+        FROM service_category c
+        WHERE <include refid="VisibleCategoryWhere"/>
+        ORDER BY c.parent_id ASC, c.sort_order ASC, c.id ASC
     </select>
 
     <select id="selectVisibleById" resultMap="ServiceCategoryMap">
-        SELECT id, parent_id, name, icon, sort_order, status, is_deleted, create_time, update_time
-        FROM service_category
-        WHERE id = #{id}
-          AND status = 1
-          AND is_deleted = 0
+        SELECT c.id, c.parent_id, c.path, c.level, c.name, c.icon, c.sort_order,
+               c.status, c.is_deleted, c.create_time, c.update_time
+        FROM service_category c
+        WHERE c.id = #{id}
+          AND <include refid="VisibleCategoryWhere"/>
         LIMIT 1
+    </select>
+
+    <select id="selectVisibleDescendantIds" resultType="long">
+        SELECT c.id
+        FROM service_category c
+        WHERE c.path LIKE CONCAT(#{pathPrefix}, '%')
+          AND <include refid="VisibleCategoryWhere"/>
+        ORDER BY c.level ASC, c.sort_order ASC, c.id ASC
     </select>
 </mapper>

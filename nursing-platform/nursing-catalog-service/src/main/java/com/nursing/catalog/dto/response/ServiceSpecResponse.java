@@ -1,20 +1,18 @@
-package com.nursing.catalog.entity;
+package com.nursing.catalog.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 
 @Data
-public class ServiceSpec {
-    private Long id;
+public class ServiceSpecResponse {
+    @JsonProperty("id")
+    private Long specId;
     private Long serviceItemId;
     private String name;
     private BigDecimal price;
     private BigDecimal originalPrice;
     private Integer duration;
     private Integer status;
-    private Integer isDeleted;
-    private LocalDateTime createTime;
-    private LocalDateTime updateTime;
 }
