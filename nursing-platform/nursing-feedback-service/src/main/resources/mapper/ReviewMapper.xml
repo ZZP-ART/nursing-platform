@@ -4,20 +4,20 @@
 <mapper namespace="com.nursing.feedback.repository.ReviewMapper">
     <insert id="insert" parameterType="com.nursing.feedback.entity.Review">
         INSERT INTO review
-        (id, order_id, user_id, service_item_id, rating, content, status, is_deleted, create_time, update_time)
+        (id, order_id, user_id, service_item_id, service_item_name, spec_name, rating, content, status, is_deleted, create_time, update_time)
         VALUES
-        (#{id}, #{orderId}, #{userId}, #{serviceItemId}, #{rating}, #{content}, #{status}, #{isDeleted}, #{createTime}, #{updateTime})
+        (#{id}, #{orderId}, #{userId}, #{serviceItemId}, #{serviceItemName}, #{specName}, #{rating}, #{content}, #{status}, #{isDeleted}, #{createTime}, #{updateTime})
     </insert>
 
     <select id="selectById" resultType="com.nursing.feedback.entity.Review">
-        SELECT id, order_id, user_id, service_item_id, rating, content, status, is_deleted, create_time, update_time
+        SELECT id, order_id, user_id, service_item_id, service_item_name, spec_name, rating, content, status, is_deleted, create_time, update_time
         FROM review
         WHERE id = #{id}
           AND is_deleted = 0
     </select>
 
     <select id="selectByOrderId" resultType="com.nursing.feedback.entity.Review">
-        SELECT id, order_id, user_id, service_item_id, rating, content, status, is_deleted, create_time, update_time
+        SELECT id, order_id, user_id, service_item_id, service_item_name, spec_name, rating, content, status, is_deleted, create_time, update_time
         FROM review
         WHERE order_id = #{orderId}
           AND is_deleted = 0
@@ -25,7 +25,7 @@
     </select>
 
     <select id="selectApprovedPageByItemId" resultType="com.nursing.feedback.entity.Review">
-        SELECT id, order_id, user_id, service_item_id, rating, content, status, is_deleted, create_time, update_time
+        SELECT id, order_id, user_id, service_item_id, service_item_name, spec_name, rating, content, status, is_deleted, create_time, update_time
         FROM review
         WHERE service_item_id = #{serviceItemId}
           AND status = 2
@@ -41,4 +41,9 @@
           AND status = 2
           AND is_deleted = 0
     </select>
+    <select id="selectMissingSnapshots" resultType="com.nursing.feedback.entity.Review">
+        SELECT id, order_id, user_id, service_item_id, service_item_name, spec_name, rating, content, status, is_deleted, create_time, update_time FROM review
+        WHERE is_deleted = 0 AND (service_item_name IS NULL OR spec_name IS NULL) ORDER BY id LIMIT #{limit}
+    </select>
+    <update id="updateSnapshots">UPDATE review SET service_item_name=#{serviceItemName}, spec_name=#{specName}, update_time=NOW() WHERE id=#{id} AND is_deleted=0</update>
 </mapper>

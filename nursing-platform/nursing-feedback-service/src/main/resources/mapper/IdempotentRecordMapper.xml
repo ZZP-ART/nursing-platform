@@ -4,15 +4,17 @@
 <mapper namespace="com.nursing.feedback.repository.IdempotentRecordMapper">
     <insert id="insert" parameterType="com.nursing.feedback.entity.IdempotentRecord">
         INSERT INTO idempotent_record
-        (id, idempotent_key, biz_type, biz_id, status, expire_time, create_time)
+        (id, biz_type, subject_id, idempotent_key, request_hash, biz_id, status, expire_time, create_time)
         VALUES
-        (#{id}, #{idempotentKey}, #{bizType}, #{bizId}, #{status}, #{expireTime}, #{createTime})
+        (#{id}, #{bizType}, #{subjectId}, #{idempotentKey}, #{requestHash}, #{bizId}, #{status}, #{expireTime}, #{createTime})
     </insert>
 
-    <select id="selectByKey" resultType="com.nursing.feedback.entity.IdempotentRecord">
-        SELECT id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+    <select id="selectByScope" resultType="com.nursing.feedback.entity.IdempotentRecord">
+        SELECT id, biz_type, subject_id, idempotent_key, request_hash, biz_id, status, expire_time, create_time
         FROM idempotent_record
-        WHERE idempotent_key = #{idempotentKey}
+        WHERE biz_type = #{bizType}
+          AND subject_id = #{subjectId}
+          AND idempotent_key = #{idempotentKey}
         LIMIT 1
     </select>
 
@@ -20,12 +22,22 @@
         UPDATE idempotent_record
         SET status = 1,
             biz_id = #{bizId}
-        WHERE idempotent_key = #{idempotentKey}
+        WHERE biz_type = #{bizType}
+          AND subject_id = #{subjectId}
+          AND idempotent_key = #{idempotentKey}
     </update>
 
-    <update id="updateStatus">
-        UPDATE idempotent_record
-        SET status = #{status}
-        WHERE idempotent_key = #{idempotentKey}
-    </update>
+    <delete id="deleteExpiredByScope">
+        DELETE FROM idempotent_record
+        WHERE biz_type = #{bizType}
+          AND subject_id = #{subjectId}
+          AND idempotent_key = #{idempotentKey}
+          AND expire_time &lt; #{now}
+    </delete>
+
+    <delete id="deleteExpiredBefore">
+        DELETE FROM idempotent_record
+        WHERE expire_time &lt; #{now}
+        LIMIT #{limit}
+    </delete>
 </mapper>

@@ -12,5 +12,12 @@ public interface IdempotentRecordMapper {
 
     IdempotentRecord selectByKeyForUpdate(@Param("idempotentKey") String idempotentKey);
 
-    int complete(@Param("idempotentKey") String idempotentKey, @Param("bizId") Long bizId);
+    int bindRequest(@Param("idempotentKey") String idempotentKey,
+                    @Param("userId") Long userId,
+                    @Param("requestFingerprint") String requestFingerprint);
+
+    int complete(@Param("idempotentKey") String idempotentKey,
+                 @Param("userId") Long userId,
+                 @Param("requestFingerprint") String requestFingerprint,
+                 @Param("bizId") Long bizId);
 }

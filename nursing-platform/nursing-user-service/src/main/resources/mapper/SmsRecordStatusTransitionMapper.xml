@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.SmsRecordStatusTransitionMapper">
+
+    <insert id="insert" parameterType="com.nursing.user.entity.SmsRecordStatusTransition">
+        INSERT INTO sms_record_status_transition (
+            id, sms_record_id, from_status, to_status, transition_reason,
+            provider_receipt, transition_time, create_time
+        ) VALUES (
+            #{id}, #{smsRecordId}, #{fromStatus}, #{toStatus}, #{transitionReason},
+            #{providerReceipt}, #{transitionTime}, #{createTime}
+        )
+    </insert>
+</mapper>

@@ -6,6 +6,8 @@
         <id column="id" property="id"/>
         <result column="idempotent_key" property="idempotentKey"/>
         <result column="biz_type" property="bizType"/>
+        <result column="user_id" property="userId"/>
+        <result column="request_fingerprint" property="requestFingerprint"/>
         <result column="biz_id" property="bizId"/>
         <result column="status" property="status"/>
         <result column="expire_time" property="expireTime"/>
@@ -13,26 +15,38 @@
     </resultMap>
 
     <insert id="insert" parameterType="com.nursing.order.entity.IdempotentRecord">
-        INSERT INTO idempotent_record (id, idempotent_key, biz_type, biz_id, status, expire_time)
-        VALUES (#{id}, #{idempotentKey}, #{bizType}, #{bizId}, #{status}, #{expireTime})
+        INSERT INTO idempotent_record (id, idempotent_key, biz_type, user_id, request_fingerprint, biz_id, status, expire_time)
+        VALUES (#{id}, #{idempotentKey}, #{bizType}, #{userId}, #{requestFingerprint}, #{bizId}, #{status}, #{expireTime})
     </insert>
 
     <select id="selectByKey" resultMap="IdempotentRecordMap">
-        SELECT id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+        SELECT id, idempotent_key, biz_type, user_id, request_fingerprint, biz_id, status, expire_time, create_time
         FROM idempotent_record
         WHERE idempotent_key = #{idempotentKey}
     </select>
 
     <select id="selectByKeyForUpdate" resultMap="IdempotentRecordMap">
-        SELECT id, idempotent_key, biz_type, biz_id, status, expire_time, create_time
+        SELECT id, idempotent_key, biz_type, user_id, request_fingerprint, biz_id, status, expire_time, create_time
         FROM idempotent_record
         WHERE idempotent_key = #{idempotentKey}
         FOR UPDATE
     </select>
 
+    <update id="bindRequest">
+        UPDATE idempotent_record
+        SET request_fingerprint = #{requestFingerprint}
+        WHERE idempotent_key = #{idempotentKey}
+          AND user_id = #{userId}
+          AND status = 0
+          AND request_fingerprint IS NULL
+    </update>
+
     <update id="complete">
         UPDATE idempotent_record
         SET status = 1, biz_id = #{bizId}
-        WHERE idempotent_key = #{idempotentKey} AND status = 0
+        WHERE idempotent_key = #{idempotentKey}
+          AND user_id = #{userId}
+          AND request_fingerprint = #{requestFingerprint}
+          AND status = 0
     </update>
 </mapper>

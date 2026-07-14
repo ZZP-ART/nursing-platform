@@ -42,6 +42,13 @@
         WHERE order_no = #{orderNo} AND pay_type = #{payType} AND is_deleted = 0
     </select>
 
+    <select id="selectByOrderNoAndPayTypeForUpdate" resultMap="PaymentRecordMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM payment_record
+        WHERE order_no = #{orderNo} AND pay_type = #{payType} AND is_deleted = 0
+        FOR UPDATE
+    </select>
+
     <select id="selectByNotifyId" resultMap="PaymentRecordMap">
         SELECT <include refid="BaseColumns"/>
         FROM payment_record
@@ -57,14 +64,16 @@
         LIMIT 1
     </select>
 
-    <update id="markRefundedByOrderId">
-        UPDATE payment_record
-        SET pay_status = 2,
-            refund_time = NOW(),
-            update_time = NOW(),
-            version = version + 1
-        WHERE order_id = #{orderId}
-          AND pay_status = 1
-          AND is_deleted = 0
+    <select id="selectByTradeNo" resultMap="PaymentRecordMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM payment_record
+        WHERE trade_no = #{tradeNo} AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <update id="markRefunded">
+        UPDATE payment_record SET pay_status = 2, refund_time = #{refundTime}, version = version + 1
+        WHERE id = #{id} AND pay_status = 1 AND is_deleted = 0
     </update>
+
 </mapper>

@@ -57,8 +57,7 @@ public class OrderController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken) {
         requireTrustedGateway(trustedToken);
-        requireUserId(userId);
-        return Result.success(idempotentService.issuePrepayToken());
+        return Result.success(idempotentService.issuePrepayToken(requireUserId(userId)));
     }
 
     @PostMapping
@@ -113,9 +112,10 @@ public class OrderController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "order id must be positive") Long id,
+            @RequestHeader("Idempotent-Key") String idempotentKey,
             @Valid @RequestBody PayRequest request) {
         requireTrustedGateway(trustedToken);
-        return Result.success(paymentService.initiatePayment(requireUserId(userId), id, request));
+        return Result.success(paymentService.initiatePayment(requireUserId(userId), id, request, idempotentKey));
     }
 
     @PostMapping("/pay/callback")

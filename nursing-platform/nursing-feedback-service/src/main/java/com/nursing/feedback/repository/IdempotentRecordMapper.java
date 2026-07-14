@@ -8,11 +8,20 @@ import org.apache.ibatis.annotations.Param;
 public interface IdempotentRecordMapper {
     int insert(IdempotentRecord record);
 
-    IdempotentRecord selectByKey(@Param("idempotentKey") String idempotentKey);
+    IdempotentRecord selectByScope(@Param("bizType") String bizType,
+                                   @Param("subjectId") Long subjectId,
+                                   @Param("idempotentKey") String idempotentKey);
 
-    int updateCompleted(@Param("idempotentKey") String idempotentKey,
+    int updateCompleted(@Param("bizType") String bizType,
+                        @Param("subjectId") Long subjectId,
+                        @Param("idempotentKey") String idempotentKey,
                         @Param("bizId") Long bizId);
 
-    int updateStatus(@Param("idempotentKey") String idempotentKey,
-                     @Param("status") Integer status);
+    int deleteExpiredByScope(@Param("bizType") String bizType,
+                             @Param("subjectId") Long subjectId,
+                             @Param("idempotentKey") String idempotentKey,
+                             @Param("now") java.time.LocalDateTime now);
+
+    int deleteExpiredBefore(@Param("now") java.time.LocalDateTime now,
+                            @Param("limit") int limit);
 }

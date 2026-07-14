@@ -28,13 +28,20 @@ import com.nursing.order.repository.PaymentRecordMapper;
 import com.nursing.order.repository.UserAddressMapper;
 import com.nursing.order.service.IOrderService;
 import com.nursing.order.service.IdempotentService;
+import com.nursing.order.service.RefundService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HexFormat;
 import java.time.format.DateTimeFormatter;
 import java.util.Objects;
 
@@ -58,6 +65,9 @@ public class OrderServiceImpl implements IOrderService {
     private final OrderSequenceMapper orderSequenceMapper;
     private final PaymentRecordMapper paymentRecordMapper;
     private final SnowflakeIdWorker snowflakeIdWorker;
+    private final RefundService refundService;
+    @Autowired(required = false)
+    private TransactionTemplate transactionTemplate;
 
     public OrderServiceImpl(IdempotentService idempotentService,
                             CatalogServiceFeignClient catalogServiceFeignClient,
@@ -67,6 +77,20 @@ public class OrderServiceImpl implements IOrderService {
                             OrderSequenceMapper orderSequenceMapper,
                             PaymentRecordMapper paymentRecordMapper,
                             SnowflakeIdWorker snowflakeIdWorker) {
+        this(idempotentService, catalogServiceFeignClient, userAddressMapper, orderHeaderMapper, orderOperationLogMapper,
+                orderSequenceMapper, paymentRecordMapper, snowflakeIdWorker, null);
+    }
+
+    @Autowired
+    public OrderServiceImpl(IdempotentService idempotentService,
+                            CatalogServiceFeignClient catalogServiceFeignClient,
+                            UserAddressMapper userAddressMapper,
+                            OrderHeaderMapper orderHeaderMapper,
+                            OrderOperationLogMapper orderOperationLogMapper,
+                            OrderSequenceMapper orderSequenceMapper,
+                            PaymentRecordMapper paymentRecordMapper,
+                            SnowflakeIdWorker snowflakeIdWorker,
+                            RefundService refundService) {
         this.idempotentService = idempotentService;
         this.catalogServiceFeignClient = catalogServiceFeignClient;
         this.userAddressMapper = userAddressMapper;
@@ -75,12 +99,31 @@ public class OrderServiceImpl implements IOrderService {
         this.orderSequenceMapper = orderSequenceMapper;
         this.paymentRecordMapper = paymentRecordMapper;
         this.snowflakeIdWorker = snowflakeIdWorker;
+        this.refundService = refundService;
     }
 
     @Override
-    @Transactional
     public OrderCreateResponse createOrder(Long userId, String idempotentKey, OrderCreateRequest request) {
-        IdempotentRecord idempotent = lockUsableToken(idempotentKey);
+        String fingerprint = requestFingerprint(request);
+        IdempotentRecord existing = idempotentService.selectByKeyForUpdate(idempotentKey);
+        if (existing == null || !IdempotentService.BIZ_TYPE_CREATE_ORDER.equals(existing.getBizType()) || !Objects.equals(existing.getUserId(), userId)) {
+            throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不存在或已过期");
+        }
+        if (Integer.valueOf(1).equals(existing.getStatus())) {
+            if (!Objects.equals(existing.getRequestFingerprint(), fingerprint)) throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不能用于不同的下单请求");
+            OrderHeader order = orderHeaderMapper.selectById(existing.getBizId());
+            return new OrderCreateResponse(existing.getBizId(), order == null ? null : order.getOrderNo());
+        }
+        ServiceItemDTO item = fetchServiceItem(request.getServiceItemId());
+        ServiceSpecDTO spec = findAvailableSpec(item, request.getServiceSpecId());
+        if (transactionTemplate == null) return createOrderInTransaction(userId, idempotentKey, request, item, spec);
+        return transactionTemplate.execute(status -> createOrderInTransaction(userId, idempotentKey, request, item, spec));
+    }
+
+    private OrderCreateResponse createOrderInTransaction(Long userId, String idempotentKey, OrderCreateRequest request,
+                                                          ServiceItemDTO item, ServiceSpecDTO spec) {
+        String requestFingerprint = requestFingerprint(request);
+        IdempotentRecord idempotent = lockUsableToken(userId, idempotentKey, requestFingerprint);
         if (Integer.valueOf(1).equals(idempotent.getStatus()) && idempotent.getBizId() != null) {
             OrderHeader existing = orderHeaderMapper.selectById(idempotent.getBizId());
             return new OrderCreateResponse(idempotent.getBizId(), existing == null ? null : existing.getOrderNo());
@@ -96,8 +139,6 @@ public class OrderServiceImpl implements IOrderService {
             throw new BusinessException(SLOT_OCCUPIED, "该时段已被预约");
         }
 
-        ServiceItemDTO item = fetchServiceItem(request.getServiceItemId());
-        ServiceSpecDTO spec = findAvailableSpec(item, request.getServiceSpecId());
         OrderHeader order = buildOrder(userId, request, address, item, spec);
         try {
             orderHeaderMapper.insert(order);
@@ -108,7 +149,9 @@ public class OrderServiceImpl implements IOrderService {
             throw e;
         }
         orderOperationLogMapper.insert(buildCreateLog(order));
-        idempotentService.complete(idempotentKey, order.getId());
+        if (idempotentService.complete(idempotentKey, userId, requestFingerprint, order.getId()) != 1) {
+            throw new IllegalStateException("Failed to complete idempotent order request");
+        }
         return new OrderCreateResponse(order.getId(), order.getOrderNo());
     }
 
@@ -156,11 +199,25 @@ public class OrderServiceImpl implements IOrderService {
     }
 
     @Override
+    public java.util.List<OrderDTO> getInternalOrders(java.util.List<Long> orderIds) {
+        if (orderIds == null || orderIds.isEmpty() || orderIds.size() > 100) {
+            throw new BusinessException(com.nursing.common.constant.ApiCode.PARAM_ERROR, "orderIds must contain 1 to 100 entries");
+        }
+        return orderHeaderMapper.selectByIds(orderIds).stream().map(this::toOrderDTO).toList();
+    }
+
+    @Override
     @Transactional
     public CancelResponse cancelOrder(Long userId, Long orderId, CancelOrderRequest request) {
         OrderHeader order = requireOwnedOrder(userId, orderId);
         if (Integer.valueOf(3).equals(order.getStatus())) {
             return new CancelResponse(order.getId(), order.getStatus(), "NO_REFUND");
+        }
+        if (Integer.valueOf(4).equals(order.getStatus())) {
+            return new CancelResponse(order.getId(), order.getStatus(), "REFUNDING");
+        }
+        if (Integer.valueOf(5).equals(order.getStatus())) {
+            return new CancelResponse(order.getId(), order.getStatus(), "REFUNDED");
         }
         if (!Integer.valueOf(0).equals(order.getStatus()) && !Integer.valueOf(1).equals(order.getStatus())) {
             throw new BusinessException(ORDER_CANCEL_INVALID, "当前状态不可取消");
@@ -183,8 +240,8 @@ public class OrderServiceImpl implements IOrderService {
         log.setToStatus(toStatus);
         log.setRemark(reason);
         orderOperationLogMapper.insert(log);
-        if (Integer.valueOf(1).equals(order.getStatus())) {
-            paymentRecordMapper.markRefundedByOrderId(order.getId());
+        if (Integer.valueOf(1).equals(order.getStatus()) && refundService != null) {
+            refundService.requestRefund(order);
         }
         return new CancelResponse(order.getId(), toStatus, Integer.valueOf(1).equals(order.getStatus()) ? "REFUNDING" : "NO_REFUND");
     }
@@ -193,6 +250,9 @@ public class OrderServiceImpl implements IOrderService {
     @Transactional
     public OrderDTO completeOrder(Long userId, Long orderId) {
         OrderHeader order = requireOwnedOrder(userId, orderId);
+        if (Integer.valueOf(2).equals(order.getStatus())) {
+            return toOrderDTO(order);
+        }
         if (!Integer.valueOf(1).equals(order.getStatus())) {
             throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可完成");
         }
@@ -240,15 +300,31 @@ public class OrderServiceImpl implements IOrderService {
         return cancelled;
     }
 
-    private IdempotentRecord lockUsableToken(String idempotentKey) {
+    private IdempotentRecord lockUsableToken(Long userId, String idempotentKey, String requestFingerprint) {
         if (!StringUtils.hasText(idempotentKey)) {
             throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不存在或已过期");
         }
         IdempotentRecord record = idempotentService.selectByKeyForUpdate(idempotentKey);
         if (record == null
                 || !IdempotentService.BIZ_TYPE_CREATE_ORDER.equals(record.getBizType())
-                || record.getExpireTime().isBefore(LocalDateTime.now())) {
+                || !Objects.equals(record.getUserId(), userId)) {
             throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不存在或已过期");
+        }
+        if (Integer.valueOf(1).equals(record.getStatus())) {
+            if (!Objects.equals(record.getRequestFingerprint(), requestFingerprint)) {
+                throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不能用于不同的下单请求");
+            }
+            return record;
+        }
+        if (record.getExpireTime().isBefore(LocalDateTime.now())) {
+            throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不存在或已过期");
+        }
+        if (StringUtils.hasText(record.getRequestFingerprint())
+                && !Objects.equals(record.getRequestFingerprint(), requestFingerprint)) {
+            throw new BusinessException(IDEMPOTENT_INVALID, "幂等令牌不能用于不同的下单请求");
+        }
+        if (idempotentService.bindRequest(idempotentKey, userId, requestFingerprint) != 1) {
+            throw new IllegalStateException("Failed to bind idempotent order request");
         }
         return record;
     }
@@ -308,6 +384,7 @@ public class OrderServiceImpl implements IOrderService {
         order.setServiceTimeSlot(request.getServiceTimeSlot());
         order.setTotalAmount(spec.getPrice());
         order.setStatus(0);
+        order.setSlotOccupied(1);
         order.setRemark(request.getRemark());
         order.setIsDeleted(0);
         return order;
@@ -326,6 +403,21 @@ public class OrderServiceImpl implements IOrderService {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private String requestFingerprint(OrderCreateRequest request) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            return HexFormat.of().formatHex(digest.digest(String.join("|",
+                    String.valueOf(request.getServiceItemId()),
+                    String.valueOf(request.getServiceSpecId()),
+                    String.valueOf(request.getAddressId()),
+                    String.valueOf(request.getServiceDate()),
+                    nullToEmpty(request.getServiceTimeSlot()),
+                    nullToEmpty(request.getRemark())).getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 is unavailable", e);
+        }
     }
 
     private OrderOperationLog buildCreateLog(OrderHeader order) {

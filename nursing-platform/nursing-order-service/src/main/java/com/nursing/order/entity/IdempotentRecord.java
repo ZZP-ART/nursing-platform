@@ -6,6 +6,8 @@ public class IdempotentRecord {
     private Long id;
     private String idempotentKey;
     private String bizType;
+    private Long userId;
+    private String requestFingerprint;
     private Long bizId;
     private Integer status;
     private LocalDateTime expireTime;
@@ -17,6 +19,10 @@ public class IdempotentRecord {
     public void setIdempotentKey(String idempotentKey) { this.idempotentKey = idempotentKey; }
     public String getBizType() { return bizType; }
     public void setBizType(String bizType) { this.bizType = bizType; }
+    public Long getUserId() { return userId; }
+    public void setUserId(Long userId) { this.userId = userId; }
+    public String getRequestFingerprint() { return requestFingerprint; }
+    public void setRequestFingerprint(String requestFingerprint) { this.requestFingerprint = requestFingerprint; }
     public Long getBizId() { return bizId; }
     public void setBizId(Long bizId) { this.bizId = bizId; }
     public Integer getStatus() { return status; }

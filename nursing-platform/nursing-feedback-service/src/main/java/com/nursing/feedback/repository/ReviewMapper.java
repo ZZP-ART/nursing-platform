@@ -18,4 +18,6 @@ public interface ReviewMapper {
                                             @Param("size") int size);
 
     long countApprovedByItemId(@Param("serviceItemId") Long serviceItemId);
+    List<Review> selectMissingSnapshots(@Param("limit") int limit);
+    int updateSnapshots(@Param("id") Long id, @Param("serviceItemName") String serviceItemName, @Param("specName") String specName);
 }

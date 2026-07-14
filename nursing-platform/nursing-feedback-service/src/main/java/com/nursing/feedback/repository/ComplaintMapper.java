@@ -11,7 +11,8 @@ public interface ComplaintMapper {
 
     Complaint selectById(@Param("id") Long id);
 
-    Complaint selectByIdempotentKey(@Param("idempotentKey") String idempotentKey);
+    Complaint selectByUserAndIdempotentKey(@Param("userId") Long userId,
+                                           @Param("idempotentKey") String idempotentKey);
 
     List<Complaint> selectPageByUserId(@Param("userId") Long userId,
                                        @Param("offset") int offset,

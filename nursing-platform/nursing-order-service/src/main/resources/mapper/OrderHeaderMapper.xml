@@ -25,6 +25,7 @@
         <result column="service_time_slot" property="serviceTimeSlot"/>
         <result column="total_amount" property="totalAmount"/>
         <result column="status" property="status"/>
+        <result column="slot_occupied" property="slotOccupied"/>
         <result column="remark" property="remark"/>
         <result column="cancel_reason" property="cancelReason"/>
         <result column="is_deleted" property="isDeleted"/>
@@ -36,7 +37,7 @@
         id, order_no, user_id, source, version, service_item_id, service_spec_id,
         service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
         receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
-        total_amount, status, remark, cancel_reason, is_deleted, create_time, update_time
+        total_amount, status, slot_occupied, remark, cancel_reason, is_deleted, create_time, update_time
     </sql>
 
     <insert id="insert" parameterType="com.nursing.order.entity.OrderHeader">
@@ -44,12 +45,12 @@
             id, order_no, user_id, source, version, service_item_id, service_spec_id,
             service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
             receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
-            total_amount, status, remark, cancel_reason, is_deleted
+            total_amount, status, slot_occupied, remark, cancel_reason, is_deleted
         ) VALUES (
             #{id}, #{orderNo}, #{userId}, #{source}, #{version}, #{serviceItemId}, #{serviceSpecId},
             #{serviceItemName}, #{categoryName}, #{specName}, #{specPrice}, #{specDuration}, #{quantity}, #{catalogSnapshotVersion}, #{addressId},
             #{receiverName}, #{receiverPhone}, #{addressDetail}, #{serviceDate}, #{serviceTimeSlot},
-            #{totalAmount}, #{status}, #{remark}, #{cancelReason}, COALESCE(#{isDeleted}, 0)
+            #{totalAmount}, #{status}, COALESCE(#{slotOccupied}, 1), #{remark}, #{cancelReason}, COALESCE(#{isDeleted}, 0)
         )
     </insert>
 
@@ -69,6 +70,19 @@
         SELECT <include refid="BaseColumns"/>
         FROM order_header
         WHERE order_no = #{orderNo} AND is_deleted = 0
+    </select>
+
+    <select id="selectByIds" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/> FROM order_header
+        WHERE is_deleted = 0 AND id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="selectByOrderNoForUpdate" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/>
+        FROM order_header
+        WHERE order_no = #{orderNo} AND is_deleted = 0
+        FOR UPDATE
     </select>
 
     <select id="selectPage" resultMap="OrderHeaderMap">
@@ -106,6 +120,7 @@
         UPDATE order_header
         SET status = #{toStatus},
             version = version + 1,
+            slot_occupied = CASE WHEN #{toStatus} IN (3, 5) THEN NULL ELSE slot_occupied END,
             cancel_reason = #{cancelReason},
             update_time = NOW()
         WHERE id = #{id}

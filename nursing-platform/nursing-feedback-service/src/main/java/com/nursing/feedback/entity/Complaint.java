@@ -11,6 +11,7 @@ public class Complaint {
     private String images;
     private Integer status;
     private String idempotentKey;
+    private String requestHash;
     private Integer isDeleted;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
@@ -77,6 +78,14 @@ public class Complaint {
 
     public void setIdempotentKey(String idempotentKey) {
         this.idempotentKey = idempotentKey;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
     }
 
     public Integer getIsDeleted() {

@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.SmsOutboxEventMapper">
+
+    <resultMap id="SmsOutboxEventMap" type="com.nursing.user.entity.SmsOutboxEvent">
+        <id property="id" column="id"/>
+        <result property="requestId" column="request_id"/>
+        <result property="eventKey" column="event_key"/>
+        <result property="eventType" column="event_type"/>
+        <result property="status" column="status"/>
+        <result property="leaseOwner" column="lease_owner"/>
+        <result property="leaseExpireTime" column="lease_expire_time"/>
+        <result property="nextExecuteTime" column="next_execute_time"/>
+        <result property="retryCount" column="retry_count"/>
+        <result property="processingTime" column="processing_time"/>
+        <result property="failureReason" column="failure_reason"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.user.entity.SmsOutboxEvent">
+        INSERT INTO sms_outbox_event (
+            id, request_id, event_key, event_type, status, next_execute_time, retry_count, create_time, update_time
+        ) VALUES (
+            #{id}, #{requestId}, #{eventKey}, #{eventType}, #{status}, #{nextExecuteTime}, #{retryCount}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <sql id="eventColumns">
+        id, request_id, event_key, event_type, status, lease_owner, lease_expire_time,
+        next_execute_time, retry_count, processing_time, failure_reason, create_time, update_time
+    </sql>
+
+    <select id="selectPending" resultMap="SmsOutboxEventMap">
+        SELECT <include refid="eventColumns"/>
+        FROM sms_outbox_event
+        WHERE status = 0 AND next_execute_time &lt;= NOW()
+        ORDER BY next_execute_time ASC, create_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectStaleProcessing" resultMap="SmsOutboxEventMap">
+        SELECT <include refid="eventColumns"/>
+        FROM sms_outbox_event
+        WHERE status = 1 AND lease_expire_time &lt; #{before}
+        ORDER BY lease_expire_time ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="claim">
+        UPDATE sms_outbox_event
+        SET status = 1,
+            lease_owner = #{leaseOwner},
+            lease_expire_time = #{leaseExpireTime},
+            processing_time = #{processingTime},
+            update_time = #{processingTime}
+        WHERE id = #{id} AND status = 0 AND next_execute_time &lt;= #{processingTime}
+    </update>
+
+    <update id="reschedule">
+        UPDATE sms_outbox_event
+        SET status = 0,
+            lease_owner = NULL,
+            lease_expire_time = NULL,
+            next_execute_time = #{nextExecuteTime},
+            retry_count = retry_count + 1,
+            failure_reason = #{failureReason},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1 AND lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markCompleted">
+        UPDATE sms_outbox_event
+        SET status = 2, lease_owner = NULL, lease_expire_time = NULL, update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1 AND lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markUnknown">
+        UPDATE sms_outbox_event
+        SET status = 3,
+            lease_owner = NULL,
+            lease_expire_time = NULL,
+            failure_reason = #{failureReason},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1 AND lease_owner = #{leaseOwner}
+    </update>
+
+    <update id="markDeadLetter">
+        UPDATE sms_outbox_event
+        SET status = 4,
+            lease_owner = NULL,
+            lease_expire_time = NULL,
+            failure_reason = #{failureReason},
+            update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1 AND lease_owner = #{leaseOwner}
+    </update>
+</mapper>

@@ -13,9 +13,13 @@ public interface OrderHeaderMapper {
 
     OrderHeader selectById(@Param("id") Long id);
 
+    List<OrderHeader> selectByIds(@Param("ids") List<Long> ids);
+
     OrderHeader selectByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
 
     OrderHeader selectByOrderNo(@Param("orderNo") String orderNo);
+
+    OrderHeader selectByOrderNoForUpdate(@Param("orderNo") String orderNo);
 
     List<OrderHeader> selectPage(@Param("userId") Long userId,
                                  @Param("status") Integer status,

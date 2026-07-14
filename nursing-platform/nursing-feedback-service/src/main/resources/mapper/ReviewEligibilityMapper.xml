@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.feedback.repository.ReviewEligibilityMapper">
+    <insert id="insert" parameterType="com.nursing.feedback.entity.ReviewEligibility">
+        INSERT INTO review_eligibility
+        (order_id, user_id, service_item_id, paid_time, create_time)
+        VALUES
+        (#{orderId}, #{userId}, #{serviceItemId}, #{paidTime}, #{createTime})
+    </insert>
+
+    <select id="selectByOrderIdAndUserId" resultType="com.nursing.feedback.entity.ReviewEligibility">
+        SELECT order_id, user_id, service_item_id, paid_time, create_time
+        FROM review_eligibility
+        WHERE order_id = #{orderId} AND user_id = #{userId}
+    </select>
+</mapper>

@@ -9,6 +9,8 @@ public class EventMessage {
     private String payload;
     private Integer status;
     private Integer retryCount;
+    private LocalDateTime nextExecuteTime;
+    private String lastError;
     private LocalDateTime createTime;
 
     public Long getId() { return id; }
@@ -23,6 +25,10 @@ public class EventMessage {
     public void setStatus(Integer status) { this.status = status; }
     public Integer getRetryCount() { return retryCount; }
     public void setRetryCount(Integer retryCount) { this.retryCount = retryCount; }
+    public LocalDateTime getNextExecuteTime() { return nextExecuteTime; }
+    public void setNextExecuteTime(LocalDateTime nextExecuteTime) { this.nextExecuteTime = nextExecuteTime; }
+    public String getLastError() { return lastError; }
+    public void setLastError(String lastError) { this.lastError = lastError; }
     public LocalDateTime getCreateTime() { return createTime; }
     public void setCreateTime(LocalDateTime createTime) { this.createTime = createTime; }
 }

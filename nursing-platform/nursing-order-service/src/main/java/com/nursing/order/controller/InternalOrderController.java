@@ -13,6 +13,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import java.util.List;
 
 @RestController
 @RequestMapping("/internal/v1/orders")
@@ -33,5 +36,14 @@ public class InternalOrderController {
             throw new BusinessException(ApiCode.FORBIDDEN, "内部服务鉴权失败", HttpStatus.FORBIDDEN);
         }
         return Result.success(orderService.getInternalOrder(orderId));
+    }
+
+    @PostMapping("/batch")
+    public Result<List<OrderDTO>> getOrders(@RequestBody List<Long> orderIds,
+                                            @RequestHeader(value = "X-Internal-Token", required = false) String token) {
+        if (!StringUtils.hasText(internalToken) || !internalToken.equals(token)) {
+            throw new BusinessException(ApiCode.FORBIDDEN, "内部服务鉴权失败", HttpStatus.FORBIDDEN);
+        }
+        return Result.success(orderService.getInternalOrders(orderIds));
     }
 }

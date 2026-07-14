@@ -4,28 +4,29 @@
 <mapper namespace="com.nursing.feedback.repository.ComplaintMapper">
     <insert id="insert" parameterType="com.nursing.feedback.entity.Complaint">
         INSERT INTO complaint
-        (id, order_id, user_id, type, content, images, status, idempotent_key, is_deleted, create_time, update_time)
+        (id, order_id, user_id, type, content, images, status, idempotent_key, request_hash, is_deleted, create_time, update_time)
         VALUES
-        (#{id}, #{orderId}, #{userId}, #{type}, #{content}, #{images}, #{status}, #{idempotentKey}, #{isDeleted}, #{createTime}, #{updateTime})
+        (#{id}, #{orderId}, #{userId}, #{type}, #{content}, #{images}, #{status}, #{idempotentKey}, #{requestHash}, #{isDeleted}, #{createTime}, #{updateTime})
     </insert>
 
     <select id="selectById" resultType="com.nursing.feedback.entity.Complaint">
-        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, is_deleted, create_time, update_time
+        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, request_hash, is_deleted, create_time, update_time
         FROM complaint
         WHERE id = #{id}
           AND is_deleted = 0
     </select>
 
-    <select id="selectByIdempotentKey" resultType="com.nursing.feedback.entity.Complaint">
-        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, is_deleted, create_time, update_time
+    <select id="selectByUserAndIdempotentKey" resultType="com.nursing.feedback.entity.Complaint">
+        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, request_hash, is_deleted, create_time, update_time
         FROM complaint
-        WHERE idempotent_key = #{idempotentKey}
+        WHERE user_id = #{userId}
+          AND idempotent_key = #{idempotentKey}
           AND is_deleted = 0
         LIMIT 1
     </select>
 
     <select id="selectPageByUserId" resultType="com.nursing.feedback.entity.Complaint">
-        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, is_deleted, create_time, update_time
+        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, request_hash, is_deleted, create_time, update_time
         FROM complaint
         WHERE user_id = #{userId}
           AND is_deleted = 0

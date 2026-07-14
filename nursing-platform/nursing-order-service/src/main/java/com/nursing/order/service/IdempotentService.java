@@ -23,7 +23,7 @@ public class IdempotentService {
         this.snowflakeIdWorker = snowflakeIdWorker;
     }
 
-    public PrepayTokenResponse issuePrepayToken() {
+    public PrepayTokenResponse issuePrepayToken(Long userId) {
         for (int i = 0; i < 3; i++) {
             String token = "pt_" + UUID.randomUUID().toString().replace("-", "");
             LocalDateTime expireTime = LocalDateTime.now().plusMinutes(TOKEN_EXPIRE_MINUTES);
@@ -31,6 +31,7 @@ public class IdempotentService {
             record.setId(snowflakeIdWorker.nextId());
             record.setIdempotentKey(token);
             record.setBizType(BIZ_TYPE_CREATE_ORDER);
+            record.setUserId(userId);
             record.setStatus(0);
             record.setExpireTime(expireTime);
             try {
@@ -47,7 +48,11 @@ public class IdempotentService {
         return idempotentRecordMapper.selectByKeyForUpdate(idempotentKey);
     }
 
-    public int complete(String idempotentKey, Long bizId) {
-        return idempotentRecordMapper.complete(idempotentKey, bizId);
+    public int bindRequest(String idempotentKey, Long userId, String requestFingerprint) {
+        return idempotentRecordMapper.bindRequest(idempotentKey, userId, requestFingerprint);
+    }
+
+    public int complete(String idempotentKey, Long userId, String requestFingerprint, Long bizId) {
+        return idempotentRecordMapper.complete(idempotentKey, userId, requestFingerprint, bizId);
     }
 }

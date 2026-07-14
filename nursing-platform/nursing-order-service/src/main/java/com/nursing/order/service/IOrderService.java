@@ -19,6 +19,8 @@ public interface IOrderService {
 
     OrderDTO getInternalOrder(Long orderId);
 
+    java.util.List<OrderDTO> getInternalOrders(java.util.List<Long> orderIds);
+
     CancelResponse cancelOrder(Long userId, Long orderId, CancelOrderRequest request);
 
     OrderDTO completeOrder(Long userId, Long orderId);

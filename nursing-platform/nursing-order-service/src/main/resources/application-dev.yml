@@ -2,35 +2,6 @@ logging:
   level:
     com.nursing: DEBUG
 
-spring:
-  datasource:
-    url: ${NURSING_ORDER_DB_URL:jdbc:mysql://localhost:3306/order_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true}
-    username: ${NURSING_DB_USERNAME:root}
-    password: ${NURSING_DB_PASSWORD:nursing_dev_password_change_me}
-  data:
-    redis:
-      host: ${NURSING_REDIS_HOST:localhost}
-  cloud:
-    nacos:
-      discovery:
-        server-addr: ${NURSING_NACOS_ADDR:localhost:8848}
-  kafka:
-    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-
-mybatis:
-  configuration:
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-
 nursing:
   payment:
     mock: true
-    alipay:
-      app-id: ${NURSING_ALIPAY_APP_ID:mock-app-id}
-      seller-id: ${NURSING_ALIPAY_SELLER_ID:mock-seller-id}
-      public-key: ${NURSING_ALIPAY_PUBLIC_KEY:}
-      private-key: ${NURSING_ALIPAY_PRIVATE_KEY:}
-      notify-url: ${NURSING_ALIPAY_NOTIFY_URL:http://localhost:8080/api/v1/orders/pay/callback}
-  gateway:
-    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN:dev-gateway-token-for-nursing-platform}
-  internal:
-    token: ${NURSING_INTERNAL_TOKEN:dev-internal-token-for-nursing-platform}

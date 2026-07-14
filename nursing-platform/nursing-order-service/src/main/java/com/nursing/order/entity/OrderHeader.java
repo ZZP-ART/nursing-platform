@@ -27,6 +27,7 @@ public class OrderHeader {
     private String serviceTimeSlot;
     private BigDecimal totalAmount;
     private Integer status;
+    private Integer slotOccupied;
     private String remark;
     private String cancelReason;
     private Integer isDeleted;
@@ -77,6 +78,8 @@ public class OrderHeader {
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public Integer getStatus() { return status; }
     public void setStatus(Integer status) { this.status = status; }
+    public Integer getSlotOccupied() { return slotOccupied; }
+    public void setSlotOccupied(Integer slotOccupied) { this.slotOccupied = slotOccupied; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
     public String getCancelReason() { return cancelReason; }

@@ -7,6 +7,8 @@ public class Review {
     private Long orderId;
     private Long userId;
     private Long serviceItemId;
+    private String serviceItemName;
+    private String specName;
     private Integer rating;
     private String content;
     private Integer status;
@@ -45,6 +47,10 @@ public class Review {
     public void setServiceItemId(Long serviceItemId) {
         this.serviceItemId = serviceItemId;
     }
+    public String getServiceItemName() { return serviceItemName; }
+    public void setServiceItemName(String value) { serviceItemName = value; }
+    public String getSpecName() { return specName; }
+    public void setSpecName(String value) { specName = value; }
 
     public Integer getRating() {
         return rating;

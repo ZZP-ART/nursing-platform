@@ -9,7 +9,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication(scanBasePackages = "com.nursing")
 @EnableDiscoveryClient
 @EnableScheduling
-@EnableFeignClients(basePackages = "com.nursing.common.feign")
+@EnableFeignClients(clients = com.nursing.common.feign.CatalogServiceFeignClient.class)
 public class OrderApplication {
      public static void main(String[] args) {
          SpringApplication.run(OrderApplication.class, args);

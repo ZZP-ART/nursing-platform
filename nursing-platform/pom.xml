@@ -41,7 +41,6 @@
 
         <jjwt.version>0.12.6</jjwt.version>
          <hutool.version>5.8.34</hutool.version>
-         <fastjson.version>2.0.54</fastjson.version>
      </properties>
  
      <dependencyManagement>
@@ -97,11 +96,6 @@
                  <artifactId>jjwt-jackson</artifactId>
                  <version>${jjwt.version}</version>
                  <scope>runtime</scope>
-             </dependency>
-             <dependency>
-                 <groupId>com.alibaba</groupId>
-                 <artifactId>fastjson</artifactId>
-                 <version>${fastjson.version}</version>
              </dependency>
              <dependency>
                  <groupId>cn.hutool</groupId>

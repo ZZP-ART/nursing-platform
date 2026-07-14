@@ -40,8 +40,10 @@ CREATE TABLE IF NOT EXISTS sms_record (
     code            VARCHAR(128) NOT NULL COMMENT '验证码BCrypt哈希',
     status          TINYINT DEFAULT 0 COMMENT '0待发送 1已发送 2发送失败 3已验证 4已过期 5结果未知',
     request_ip      VARCHAR(45) COMMENT '验证码请求IP',
-    provider        VARCHAR(32) NOT NULL DEFAULT 'aliyun' COMMENT '短信供应商',
+    provider        VARCHAR(32) NOT NULL DEFAULT 'mock' COMMENT '短信发送器',
     provider_request_id VARCHAR(128) COMMENT '供应商请求ID或BizId',
+    provider_receipt VARCHAR(1024) COMMENT '供应商回执摘要，不记录验证码明文',
+    provider_receipt_time DATETIME COMMENT '供应商回执时间',
     failure_reason  VARCHAR(512) COMMENT '发送失败原因',
     send_time       DATETIME NOT NULL COMMENT '发送时间',
     expire_time     DATETIME NOT NULL COMMENT '过期时间',
@@ -52,6 +54,60 @@ CREATE TABLE IF NOT EXISTS sms_record (
     INDEX idx_phone_time (phone, send_time),
     INDEX idx_phone_type_status (phone, sms_type, status, send_time)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信发送记录表';
+
+CREATE TABLE IF NOT EXISTS sms_send_request (
+    id                      BIGINT NOT NULL COMMENT '主键(雪花算法)',
+    idempotency_key         VARCHAR(64) NOT NULL COMMENT '客户端请求幂等键',
+    request_fingerprint     CHAR(64) NOT NULL COMMENT '手机号和短信类型请求摘要',
+    phone                   VARCHAR(20) NOT NULL COMMENT '手机号',
+    sms_type                VARCHAR(32) NOT NULL COMMENT '短信类型',
+    request_ip              VARCHAR(45) COMMENT '请求IP',
+    status                  TINYINT NOT NULL DEFAULT 0 COMMENT '0待处理 1处理中 2供应商已受理 3明确失败 4结果未知',
+    response_snapshot       VARCHAR(1024) NOT NULL COMMENT '首次受理响应快照',
+    failure_reason          VARCHAR(512) COMMENT '失败或未知原因',
+    idempotent_expire_time  DATETIME NOT NULL COMMENT '幂等记录过期时间',
+    create_time             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time             DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sms_request_idempotency (idempotency_key),
+    INDEX idx_sms_request_status_time (status, create_time),
+    INDEX idx_sms_request_terminal_expiry (status, idempotent_expire_time),
+    INDEX idx_sms_request_phone_type_time (phone, sms_type, create_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信发送请求表';
+
+CREATE TABLE IF NOT EXISTS sms_outbox_event (
+    id                      BIGINT NOT NULL COMMENT '主键(雪花算法)',
+    request_id              BIGINT NOT NULL COMMENT '短信发送请求ID',
+    event_key               VARCHAR(128) NOT NULL COMMENT '事件幂等键',
+    event_type              VARCHAR(32) NOT NULL DEFAULT 'SMS_SEND' COMMENT '事件类型',
+    status                  TINYINT NOT NULL DEFAULT 0 COMMENT '0待处理 1处理中 2已完成 3结果未知 4死信',
+    lease_owner             VARCHAR(128) COMMENT '领取Worker标识',
+    lease_expire_time       DATETIME COMMENT '领取租约到期时间',
+    next_execute_time       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '下次可执行时间',
+    retry_count             INT NOT NULL DEFAULT 0 COMMENT '已尝试次数',
+    processing_time         DATETIME COMMENT 'Worker领取时间',
+    failure_reason          VARCHAR(512) COMMENT '处理失败或未知原因',
+    create_time             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    update_time             DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_sms_outbox_event_key (event_key),
+    UNIQUE KEY uk_sms_outbox_request (request_id),
+    INDEX idx_sms_outbox_dispatch (status, next_execute_time),
+    INDEX idx_sms_outbox_lease_expire (lease_expire_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信本地Outbox事件表';
+
+CREATE TABLE IF NOT EXISTS sms_record_status_transition (
+    id                      BIGINT NOT NULL COMMENT '主键(雪花算法)',
+    sms_record_id           BIGINT NOT NULL COMMENT '短信审计记录ID',
+    from_status             TINYINT COMMENT '变更前状态，创建时为空',
+    to_status               TINYINT NOT NULL COMMENT '变更后状态',
+    transition_reason       VARCHAR(512) COMMENT '状态变更原因',
+    provider_receipt        VARCHAR(1024) COMMENT '供应商回执摘要',
+    transition_time         DATETIME NOT NULL COMMENT '状态变更时间',
+    create_time             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (id),
+    INDEX idx_sms_transition_record_time (sms_record_id, transition_time)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='短信审计状态转移表';
 
 CREATE TABLE IF NOT EXISTS idempotent_record (
     id              BIGINT NOT NULL COMMENT '主键(雪花算法)',

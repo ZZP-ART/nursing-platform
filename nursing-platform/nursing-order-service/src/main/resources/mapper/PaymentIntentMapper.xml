@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.order.repository.PaymentIntentMapper">
+  <resultMap id="Map" type="com.nursing.order.entity.PaymentIntent"><id property="id" column="id"/><result property="orderId" column="order_id"/><result property="userId" column="user_id"/><result property="idempotentKey" column="idempotent_key"/><result property="requestHash" column="request_hash"/><result property="payChannel" column="pay_channel"/><result property="status" column="status"/><result property="responseSnapshot" column="response_snapshot"/><result property="paymentRecordId" column="payment_record_id"/></resultMap>
+  <select id="selectByUserKey" resultMap="Map">SELECT * FROM payment_intent WHERE user_id=#{userId} AND idempotent_key=#{key}</select>
+  <select id="selectByOrderId" resultMap="Map">SELECT * FROM payment_intent WHERE order_id=#{orderId}</select>
+  <insert id="insert">INSERT INTO payment_intent(id,order_id,user_id,idempotent_key,request_hash,pay_channel,status,response_snapshot,payment_record_id) VALUES(#{id},#{orderId},#{userId},#{idempotentKey},#{requestHash},#{payChannel},#{status},CAST(#{responseSnapshot} AS JSON),#{paymentRecordId})</insert>
+  <update id="markPaid">UPDATE payment_intent SET status=1,payment_record_id=#{paymentRecordId},response_snapshot=CAST(#{snapshot} AS JSON) WHERE order_id=#{orderId}</update>
+</mapper>

@@ -12,6 +12,8 @@ public class SmsRecord {
     private String requestIp;
     private String provider;
     private String providerRequestId;
+    private String providerReceipt;
+    private LocalDateTime providerReceiptTime;
     private String failureReason;
     private LocalDateTime sendTime;
     private LocalDateTime expireTime;
@@ -82,6 +84,11 @@ public class SmsRecord {
     public void setProviderRequestId(String providerRequestId) {
         this.providerRequestId = providerRequestId;
     }
+
+    public String getProviderReceipt() { return providerReceipt; }
+    public void setProviderReceipt(String providerReceipt) { this.providerReceipt = providerReceipt; }
+    public LocalDateTime getProviderReceiptTime() { return providerReceiptTime; }
+    public void setProviderReceiptTime(LocalDateTime providerReceiptTime) { this.providerReceiptTime = providerReceiptTime; }
 
     public String getFailureReason() {
         return failureReason;

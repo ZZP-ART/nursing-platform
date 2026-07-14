@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: nursing-user-service
+  profiles:
+    default: dev
   config:
     import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:
@@ -44,11 +46,5 @@ nursing:
   security:
     id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY}
   sms:
-    sign-name: ${ALIYUN_SMS_SIGN_NAME}
-    templates:
-      register: ${ALIYUN_SMS_TEMPLATE_REGISTER}
-      login: ${ALIYUN_SMS_TEMPLATE_LOGIN}
-      reset-password: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD}
-    aliyun:
-      access-key-id: ${ALIYUN_SMS_ACCESS_KEY_ID}
-      access-key-secret: ${ALIYUN_SMS_ACCESS_KEY_SECRET}
+    mock:
+      code: ${NURSING_SMS_MOCK_CODE:123456}

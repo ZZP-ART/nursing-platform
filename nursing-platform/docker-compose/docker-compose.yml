@@ -4,7 +4,7 @@ services:
     container_name: nursing-mysql
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
     ports:
       - "${NURSING_MYSQL_PORT:-13306}:3306"
     volumes:
@@ -13,10 +13,55 @@ services:
       - ../nursing-catalog-service/deploy/mysql/init/02_catalog_schema.sql:/docker-entrypoint-initdb.d/02_catalog_schema.sql:ro
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-dev_root_password_change_me}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"]
       interval: 10s
       retries: 10
       start_period: 30s
+    networks:
+      - nursing-net
+
+  db-bootstrap:
+    image: mysql:8.0
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      NURSING_USER_DB_USERNAME: ${NURSING_USER_DB_USERNAME:?NURSING_USER_DB_USERNAME is required}
+      NURSING_USER_DB_PASSWORD: ${NURSING_USER_DB_PASSWORD:?NURSING_USER_DB_PASSWORD is required}
+      NURSING_CATALOG_DB_USERNAME: ${NURSING_CATALOG_DB_USERNAME:?NURSING_CATALOG_DB_USERNAME is required}
+      NURSING_CATALOG_DB_PASSWORD: ${NURSING_CATALOG_DB_PASSWORD:?NURSING_CATALOG_DB_PASSWORD is required}
+      NURSING_ORDER_DB_USERNAME: ${NURSING_ORDER_DB_USERNAME:?NURSING_ORDER_DB_USERNAME is required}
+      NURSING_ORDER_DB_PASSWORD: ${NURSING_ORDER_DB_PASSWORD:?NURSING_ORDER_DB_PASSWORD is required}
+      NURSING_FEEDBACK_DB_USERNAME: ${NURSING_FEEDBACK_DB_USERNAME:?NURSING_FEEDBACK_DB_USERNAME is required}
+      NURSING_FEEDBACK_DB_PASSWORD: ${NURSING_FEEDBACK_DB_PASSWORD:?NURSING_FEEDBACK_DB_PASSWORD is required}
+      NURSING_NACOS_DB_USERNAME: ${NURSING_NACOS_DB_USERNAME:?NURSING_NACOS_DB_USERNAME is required}
+      NURSING_NACOS_DB_PASSWORD: ${NURSING_NACOS_DB_PASSWORD:?NURSING_NACOS_DB_PASSWORD is required}
+      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
+      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
+      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
+      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
+    volumes:
+      - ./db-bootstrap/bootstrap.sh:/bootstrap.sh:ro
+    command: ["sh", "/bootstrap.sh"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - nursing-net
+
+  schema-preflight:
+    image: mysql:8.0
+    restart: "no"
+    environment:
+      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
+      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
+      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
+      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
+    volumes:
+      - ./db-bootstrap/schema-preflight.sh:/schema-preflight.sh:ro
+    command: ["sh", "/schema-preflight.sh"]
+    depends_on:
+      db-bootstrap:
+        condition: service_completed_successfully
     networks:
       - nursing-net
 
@@ -46,8 +91,8 @@ services:
       MYSQL_SERVICE_PORT: 3306
       MYSQL_SERVICE_DB_NAME: nacos_config
       MYSQL_SERVICE_DB_PARAM: "characterEncoding=utf8&connectTimeout=1000&socketTimeout=3000&autoReconnect=true&useSSL=false&allowPublicKeyRetrieval=true"
-      MYSQL_SERVICE_USER: ${NURSING_DB_USERNAME:-nursing}
-      MYSQL_SERVICE_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      MYSQL_SERVICE_USER: ${NURSING_NACOS_DB_USERNAME:?NURSING_NACOS_DB_USERNAME is required}
+      MYSQL_SERVICE_PASSWORD: ${NURSING_NACOS_DB_PASSWORD:?NURSING_NACOS_DB_PASSWORD is required}
       JVM_XMS: 256m
       JVM_XMX: 512m
       JVM_XMN: 128m
@@ -56,6 +101,8 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://localhost:8848/nacos/actuator/health || exit 1"]
       interval: 30s
@@ -101,19 +148,18 @@ services:
   gateway:
     build:
       context: ..
-      dockerfile: Dockerfile
-      args:
-        MODULE: nursing-gateway
+      dockerfile: nursing-gateway/Dockerfile
     image: nursing/gateway:local
     container_name: nursing-gateway
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_REDIS_HOST: redis
-      NURSING_JWT_SECRET: ${NURSING_JWT_SECRET:-dev-jwt-secret-for-nursing-platform-32bytes}
-      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
-      JAVA_OPTS: -Xms128m -Xmx256m
+      NURSING_REDIS_PORT: 6379
+      NURSING_JWT_SECRET: ${NURSING_JWT_SECRET:?NURSING_JWT_SECRET is required}
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
     ports:
       - "8080:8080"
     depends_on:
@@ -129,12 +175,19 @@ services:
     networks:
       - nursing-net
 
+  uploads-init:
+    image: busybox:1.36
+    restart: "no"
+    command: ["sh", "-c", "mkdir -p /uploads && chown -R 10001:10001 /uploads"]
+    volumes:
+      - uploads-data:/uploads
+    networks:
+      - nursing-net
+
   user-service:
     build:
       context: ..
-      dockerfile: Dockerfile
-      args:
-        MODULE: nursing-user-service
+      dockerfile: nursing-user-service/Dockerfile
     image: nursing/user-service:local
     container_name: nursing-user-service
     restart: unless-stopped
@@ -142,8 +195,8 @@ services:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
       NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_USER_DB_URL: ${NURSING_USER_DB_URL:?NURSING_USER_DB_URL is required}
-      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:?NURSING_DB_USERNAME is required}
-      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:?NURSING_DB_PASSWORD is required}
+      NURSING_DB_USERNAME: ${NURSING_USER_DB_USERNAME:?NURSING_USER_DB_USERNAME is required}
+      NURSING_DB_PASSWORD: ${NURSING_USER_DB_PASSWORD:?NURSING_USER_DB_PASSWORD is required}
       NURSING_REDIS_HOST: ${NURSING_REDIS_HOST:?NURSING_REDIS_HOST is required}
       NURSING_REDIS_PORT: ${NURSING_REDIS_PORT:?NURSING_REDIS_PORT is required}
       NURSING_NACOS_ADDR: ${NURSING_NACOS_ADDR:?NURSING_NACOS_ADDR is required}
@@ -153,22 +206,23 @@ services:
       NURSING_JWT_SECRET: ${NURSING_JWT_SECRET:?NURSING_JWT_SECRET is required}
       NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
       NURSING_ID_CARD_ENCRYPTION_KEY: ${NURSING_ID_CARD_ENCRYPTION_KEY:?NURSING_ID_CARD_ENCRYPTION_KEY is required}
-      ALIYUN_SMS_SIGN_NAME: ${ALIYUN_SMS_SIGN_NAME:?ALIYUN_SMS_SIGN_NAME is required}
-      ALIYUN_SMS_TEMPLATE_REGISTER: ${ALIYUN_SMS_TEMPLATE_REGISTER:?ALIYUN_SMS_TEMPLATE_REGISTER is required}
-      ALIYUN_SMS_TEMPLATE_LOGIN: ${ALIYUN_SMS_TEMPLATE_LOGIN:?ALIYUN_SMS_TEMPLATE_LOGIN is required}
-      ALIYUN_SMS_TEMPLATE_RESET_PASSWORD: ${ALIYUN_SMS_TEMPLATE_RESET_PASSWORD:?ALIYUN_SMS_TEMPLATE_RESET_PASSWORD is required}
-      ALIYUN_SMS_ACCESS_KEY_ID: ${ALIYUN_SMS_ACCESS_KEY_ID:?ALIYUN_SMS_ACCESS_KEY_ID is required}
-      ALIYUN_SMS_ACCESS_KEY_SECRET: ${ALIYUN_SMS_ACCESS_KEY_SECRET:?ALIYUN_SMS_ACCESS_KEY_SECRET is required}
-      JAVA_OPTS: -Xms128m -Xmx256m
+      NURSING_FILE_UPLOAD_DIR: /app/data/uploads
+      NURSING_FILE_PUBLIC_BASE_URL: ${NURSING_FILE_PUBLIC_BASE_URL:-http://localhost/uploads}
     expose:
       - "8081"
+    volumes:
+      - uploads-data:/app/data/uploads
     depends_on:
       mysql:
         condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       nacos:
         condition: service_healthy
+      uploads-init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8081/actuator/health"]
       interval: 15s
@@ -180,27 +234,24 @@ services:
   catalog-service:
     build:
       context: ..
-      dockerfile: Dockerfile
-      args:
-        MODULE: nursing-catalog-service
+      dockerfile: nursing-catalog-service/Dockerfile
     image: nursing/catalog-service:local
     container_name: nursing-catalog-service
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_CATALOG_DB_URL: jdbc:mysql://mysql:3306/catalog_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
-      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
-      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
-      NURSING_REDIS_HOST: redis
+      NURSING_NACOS_CONFIG_PREFIX: "optional:"
+      NURSING_CATALOG_DB_URL: ${NURSING_CATALOG_DB_URL:?NURSING_CATALOG_DB_URL is required}
+      NURSING_DB_USERNAME: ${NURSING_CATALOG_DB_USERNAME:?NURSING_CATALOG_DB_USERNAME is required}
+      NURSING_DB_PASSWORD: ${NURSING_CATALOG_DB_PASSWORD:?NURSING_CATALOG_DB_PASSWORD is required}
       NURSING_NACOS_ADDR: nacos:8848
-      JAVA_OPTS: -Xms128m -Xmx256m
     expose:
       - "8082"
     depends_on:
       mysql:
         condition: service_healthy
-      redis:
-        condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
       nacos:
         condition: service_healthy
     healthcheck:
@@ -214,29 +265,34 @@ services:
   order-service:
     build:
       context: ..
-      dockerfile: Dockerfile
-      args:
-        MODULE: nursing-order-service
+      dockerfile: nursing-order-service/Dockerfile
     image: nursing/order-service:local
     container_name: nursing-order-service
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_ORDER_DB_URL: jdbc:mysql://mysql:3306/order_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
-      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
-      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_NACOS_CONFIG_PREFIX: "optional:"
+      NURSING_ORDER_DB_URL: ${NURSING_ORDER_DB_URL:?NURSING_ORDER_DB_URL is required}
+      NURSING_DB_USERNAME: ${NURSING_ORDER_DB_USERNAME:?NURSING_ORDER_DB_USERNAME is required}
+      NURSING_DB_PASSWORD: ${NURSING_ORDER_DB_PASSWORD:?NURSING_ORDER_DB_PASSWORD is required}
+      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
+      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
       NURSING_REDIS_HOST: redis
+      NURSING_REDIS_PORT: 6379
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
-      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:-dev-internal-token-for-nursing-platform}
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
+      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:?NURSING_INTERNAL_TOKEN is required}
       NURSING_PAYMENT_MOCK: ${NURSING_PAYMENT_MOCK:-true}
-      JAVA_OPTS: -Xms128m -Xmx384m
     expose:
       - "8083"
     depends_on:
       mysql:
         condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
+      schema-preflight:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
       kafka:
@@ -254,27 +310,31 @@ services:
   feedback-service:
     build:
       context: ..
-      dockerfile: Dockerfile
-      args:
-        MODULE: nursing-feedback-service
+      dockerfile: nursing-feedback-service/Dockerfile
     image: nursing/feedback-service:local
     container_name: nursing-feedback-service
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_FEEDBACK_DB_URL: jdbc:mysql://mysql:3306/feedback_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&rewriteBatchedStatements=true
-      NURSING_DB_USERNAME: ${NURSING_DB_USERNAME:-nursing}
-      NURSING_DB_PASSWORD: ${NURSING_DB_PASSWORD:-nursing_dev_password_change_me}
+      NURSING_NACOS_CONFIG_PREFIX: "optional:"
+      NURSING_FEEDBACK_DB_URL: ${NURSING_FEEDBACK_DB_URL:?NURSING_FEEDBACK_DB_URL is required}
+      NURSING_DB_USERNAME: ${NURSING_FEEDBACK_DB_USERNAME:?NURSING_FEEDBACK_DB_USERNAME is required}
+      NURSING_DB_PASSWORD: ${NURSING_FEEDBACK_DB_PASSWORD:?NURSING_FEEDBACK_DB_PASSWORD is required}
+      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
+      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:-dev-gateway-token-for-nursing-platform}
-      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:-dev-internal-token-for-nursing-platform}
-      JAVA_OPTS: -Xms128m -Xmx256m
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
+      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:?NURSING_INTERNAL_TOKEN is required}
     expose:
       - "8084"
     depends_on:
       mysql:
         condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
+      schema-preflight:
+        condition: service_completed_successfully
       kafka:
         condition: service_healthy
       nacos:
@@ -287,9 +347,25 @@ services:
     networks:
       - nursing-net
 
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: nursing-nginx
+    restart: unless-stopped
+    ports:
+      - "${NURSING_NGINX_PORT:-80}:80"
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - uploads-data:/srv/uploads:ro
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks:
+      - nursing-net
+
 volumes:
   mysql-data:
   redis-data:
+  uploads-data:
 
 networks:
   nursing-net:

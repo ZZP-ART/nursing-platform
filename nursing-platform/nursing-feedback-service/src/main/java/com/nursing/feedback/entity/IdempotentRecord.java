@@ -4,8 +4,10 @@ import java.time.LocalDateTime;
 
 public class IdempotentRecord {
     private Long id;
-    private String idempotentKey;
     private String bizType;
+    private Long subjectId;
+    private String idempotentKey;
+    private String requestHash;
     private Long bizId;
     private Integer status;
     private LocalDateTime expireTime;
@@ -33,6 +35,22 @@ public class IdempotentRecord {
 
     public void setBizType(String bizType) {
         this.bizType = bizType;
+    }
+
+    public Long getSubjectId() {
+        return subjectId;
+    }
+
+    public void setSubjectId(Long subjectId) {
+        this.subjectId = subjectId;
+    }
+
+    public String getRequestHash() {
+        return requestHash;
+    }
+
+    public void setRequestHash(String requestHash) {
+        this.requestHash = requestHash;
     }
 
     public Long getBizId() {

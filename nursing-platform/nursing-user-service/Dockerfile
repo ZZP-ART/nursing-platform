@@ -6,13 +6,17 @@ WORKDIR /workspace
 
 COPY .mvn ./.mvn
 COPY pom.xml ./
+COPY nursing-gateway ./nursing-gateway
+COPY nursing-catalog-service ./nursing-catalog-service
+COPY nursing-order-service ./nursing-order-service
+COPY nursing-feedback-service ./nursing-feedback-service
 COPY nursing-common ./nursing-common
 COPY nursing-user-service ./nursing-user-service
 COPY docker-compose/Healthcheck.java ./Healthcheck.java
 
 RUN --mount=type=cache,id=nursing-user-service-maven-repo,target=/root/.m2 \
     javac -d /workspace/healthcheck /workspace/Healthcheck.java && \
-    mvn -pl nursing-user-service -am -DskipTests package
+    mvn --batch-mode --no-transfer-progress -pl nursing-user-service -am -DskipTests package
 
 
 FROM eclipse-temurin:21-jre AS runtime

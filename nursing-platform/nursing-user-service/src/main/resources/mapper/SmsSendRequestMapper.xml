@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.user.mapper.SmsSendRequestMapper">
+
+    <resultMap id="SmsSendRequestMap" type="com.nursing.user.entity.SmsSendRequest">
+        <id property="id" column="id"/>
+        <result property="idempotencyKey" column="idempotency_key"/>
+        <result property="requestFingerprint" column="request_fingerprint"/>
+        <result property="phone" column="phone"/>
+        <result property="smsType" column="sms_type"/>
+        <result property="requestIp" column="request_ip"/>
+        <result property="status" column="status"/>
+        <result property="responseSnapshot" column="response_snapshot"/>
+        <result property="failureReason" column="failure_reason"/>
+        <result property="idempotentExpireTime" column="idempotent_expire_time"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="com.nursing.user.entity.SmsSendRequest">
+        INSERT INTO sms_send_request (
+            id, idempotency_key, request_fingerprint, phone, sms_type, request_ip,
+            status, response_snapshot, idempotent_expire_time, create_time, update_time
+        ) VALUES (
+            #{id}, #{idempotencyKey}, #{requestFingerprint}, #{phone}, #{smsType}, #{requestIp},
+            #{status}, #{responseSnapshot}, #{idempotentExpireTime}, #{createTime}, #{updateTime}
+        )
+    </insert>
+
+    <sql id="requestColumns">
+        id, idempotency_key, request_fingerprint, phone, sms_type, request_ip,
+        status, response_snapshot, failure_reason, idempotent_expire_time, create_time, update_time
+    </sql>
+
+    <select id="selectByIdempotencyKey" resultMap="SmsSendRequestMap">
+        SELECT <include refid="requestColumns"/>
+        FROM sms_send_request
+        WHERE idempotency_key = #{idempotencyKey}
+        LIMIT 1
+    </select>
+
+    <select id="selectByIdAndIdempotencyKey" resultMap="SmsSendRequestMap">
+        SELECT <include refid="requestColumns"/>
+        FROM sms_send_request
+        WHERE id = #{id} AND idempotency_key = #{idempotencyKey}
+        LIMIT 1
+    </select>
+
+    <select id="selectById" resultMap="SmsSendRequestMap">
+        SELECT <include refid="requestColumns"/>
+        FROM sms_send_request
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <delete id="deleteExpiredTerminalByIdempotencyKey">
+        DELETE FROM sms_send_request
+        WHERE idempotency_key = #{idempotencyKey}
+          AND idempotent_expire_time &lt;= #{now}
+          AND status IN (2, 3, 4)
+    </delete>
+
+    <delete id="deleteExpiredTerminal">
+        DELETE FROM sms_send_request
+        WHERE idempotent_expire_time &lt;= #{now}
+          AND status IN (2, 3, 4)
+        LIMIT #{limit}
+    </delete>
+
+    <update id="markProcessing">
+        UPDATE sms_send_request
+        SET status = 1, update_time = #{updateTime}
+        WHERE id = #{id} AND status = 0
+    </update>
+
+    <update id="resetPending">
+        UPDATE sms_send_request
+        SET status = 0, update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1
+    </update>
+
+    <update id="markSent">
+        UPDATE sms_send_request
+        SET status = 2, failure_reason = NULL, update_time = #{updateTime}
+        WHERE id = #{id} AND status = 1
+    </update>
+
+    <update id="markFailed">
+        UPDATE sms_send_request
+        SET status = 3, failure_reason = #{failureReason}, update_time = #{updateTime}
+        WHERE id = #{id} AND status IN (0, 1)
+    </update>
+
+    <update id="markUnknown">
+        UPDATE sms_send_request
+        SET status = 4, failure_reason = #{failureReason}, update_time = #{updateTime}
+        WHERE id = #{id} AND status IN (0, 1)
+    </update>
+</mapper>

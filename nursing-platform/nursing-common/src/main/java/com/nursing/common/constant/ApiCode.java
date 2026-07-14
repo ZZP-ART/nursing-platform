@@ -11,6 +11,7 @@
      public static final int BIZ_ERROR = 1007;
      public static final int RATE_LIMITED = 1008;
      public static final int SERVER_ERROR = 1999;
+     public static final int DEPENDENCY_UNAVAILABLE = 1009;
  
      // User: 2000-2999
      // Order: 3000-3999

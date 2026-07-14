@@ -12,6 +12,7 @@ import org.springframework.stereotype.Component;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
 @Component
 public class SmsRateLimiter {
@@ -41,7 +42,7 @@ public class SmsRateLimiter {
             if ipDayCount >= tonumber(ARGV[4]) then
                 return 'IP_DAILY_LIMITED'
             end
-            redis.call('set', KEYS[1], '1', 'EX', tonumber(ARGV[1]))
+            redis.call('set', KEYS[1], ARGV[7], 'EX', tonumber(ARGV[1]))
             local nextPhoneCount = redis.call('incr', KEYS[2])
             if nextPhoneCount == 1 then redis.call('expire', KEYS[2], tonumber(ARGV[5])) end
             local nextIpHourCount = redis.call('incr', KEYS[3])
@@ -51,23 +52,42 @@ public class SmsRateLimiter {
             return 'OK'
             """;
 
+    private static final String CANCEL_RESERVATION_LUA = """
+            if redis.call('get', KEYS[1]) ~= ARGV[1] then
+                return 0
+            end
+            redis.call('del', KEYS[1])
+            for index = 2, #KEYS do
+                local count = tonumber(redis.call('get', KEYS[index]) or '0')
+                if count <= 1 then
+                    redis.call('del', KEYS[index])
+                else
+                    redis.call('decr', KEYS[index])
+                end
+            end
+            return 1
+            """;
+
     private final SmsProperties smsProperties;
     private final RedisTemplate<String, String> redisTemplate;
     private final DefaultRedisScript<String> reserveScript;
+    private final DefaultRedisScript<Long> cancelReservationScript;
 
     public SmsRateLimiter(SmsProperties smsProperties, RedisTemplate<String, String> redisTemplate) {
         this.smsProperties = smsProperties;
         this.redisTemplate = redisTemplate;
         this.reserveScript = new DefaultRedisScript<>(LUA, String.class);
+        this.cancelReservationScript = new DefaultRedisScript<>(CANCEL_RESERVATION_LUA, Long.class);
     }
 
-    public void checkAndReserve(String phone, String smsType, String ip) {
+    public Reservation checkAndReserve(String phone, String smsType, String ip) {
         LocalDateTime now = LocalDateTime.now();
         List<String> keys = List.of(
                 rateKey(phone, smsType),
                 phoneDailyKey(phone, now),
                 ipHourlyKey(ip, now),
                 ipDailyKey(ip, now));
+        String token = UUID.randomUUID().toString();
         String result = redisTemplate.execute(
                 reserveScript,
                 keys,
@@ -76,16 +96,23 @@ public class SmsRateLimiter {
                 String.valueOf(smsProperties.getIpHourlyLimit()),
                 String.valueOf(smsProperties.getIpDailyLimit()),
                 String.valueOf(secondsUntilTomorrow(now)),
-                String.valueOf(secondsUntilNextHour(now)));
+                String.valueOf(secondsUntilNextHour(now)),
+                token);
         if (OK.equals(result)) {
-            return;
+            return new Reservation(token, keys);
         }
         throw toException(result, keys.get(0));
+    }
+
+    public void cancelReservation(Reservation reservation) {
+        redisTemplate.execute(cancelReservationScript, reservation.keys(), reservation.token());
     }
 
     public void releaseRate(String phone, String smsType) {
         redisTemplate.delete(rateKey(phone, smsType));
     }
+
+    public record Reservation(String token, List<String> keys) { }
 
     public String rateKey(String phone, String smsType) {
         return "sms:rate:" + smsType + ":" + phone;

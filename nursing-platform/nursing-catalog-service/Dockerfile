@@ -6,6 +6,10 @@ WORKDIR /workspace
 
 COPY .mvn ./.mvn
 COPY pom.xml ./
+COPY nursing-gateway ./nursing-gateway
+COPY nursing-user-service ./nursing-user-service
+COPY nursing-order-service ./nursing-order-service
+COPY nursing-feedback-service ./nursing-feedback-service
 COPY nursing-common ./nursing-common
 COPY nursing-catalog-service ./nursing-catalog-service
 COPY docker-compose/Healthcheck.java ./Healthcheck.java

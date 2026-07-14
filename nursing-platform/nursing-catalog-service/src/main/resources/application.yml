@@ -4,6 +4,8 @@ server:
 spring:
   application:
     name: nursing-catalog-service
+  profiles:
+    default: dev
   config:
     import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
   datasource:

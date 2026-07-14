@@ -13,6 +13,8 @@
         <result property="requestIp" column="request_ip"/>
         <result property="provider" column="provider"/>
         <result property="providerRequestId" column="provider_request_id"/>
+        <result property="providerReceipt" column="provider_receipt"/>
+        <result property="providerReceiptTime" column="provider_receipt_time"/>
         <result property="failureReason" column="failure_reason"/>
         <result property="sendTime" column="send_time"/>
         <result property="expireTime" column="expire_time"/>

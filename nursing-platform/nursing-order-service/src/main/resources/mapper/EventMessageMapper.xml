@@ -9,33 +9,37 @@
         <result column="payload" property="payload"/>
         <result column="status" property="status"/>
         <result column="retry_count" property="retryCount"/>
+        <result column="next_execute_time" property="nextExecuteTime"/>
+        <result column="last_error" property="lastError"/>
         <result column="create_time" property="createTime"/>
     </resultMap>
 
     <insert id="insert" parameterType="com.nursing.order.entity.EventMessage">
-        INSERT INTO event_message (id, topic, event_key, payload, status, retry_count)
-        VALUES (#{id}, #{topic}, #{eventKey}, CAST(#{payload} AS JSON), #{status}, COALESCE(#{retryCount}, 0))
+        INSERT INTO event_message (id, topic, event_key, payload, status, retry_count, next_execute_time, last_error)
+        VALUES (#{id}, #{topic}, #{eventKey}, CAST(#{payload} AS JSON), #{status}, COALESCE(#{retryCount}, 0),
+                #{nextExecuteTime}, #{lastError})
     </insert>
 
     <select id="selectPending" resultMap="EventMessageMap">
         SELECT id, topic, event_key, JSON_UNQUOTE(JSON_EXTRACT(payload, '$')) AS payload,
-               status, retry_count, create_time
+               status, retry_count, next_execute_time, last_error, create_time
         FROM event_message
-        WHERE status = 0
-        ORDER BY create_time ASC
+        WHERE status = 0 AND (next_execute_time IS NULL OR next_execute_time &lt;= #{now})
+        ORDER BY next_execute_time ASC, create_time ASC
         LIMIT #{limit}
     </select>
 
     <update id="markSent">
         UPDATE event_message
-        SET status = 1
+        SET status = 1, last_error = NULL
         WHERE id = #{id} AND status = 0
     </update>
 
-    <update id="markFailed">
+    <update id="markRetry">
         UPDATE event_message
         SET retry_count = retry_count + 1,
-            status = CASE WHEN retry_count + 1 >= 3 THEN 2 ELSE 0 END
+            next_execute_time = #{nextExecuteTime},
+            last_error = #{lastError}
         WHERE id = #{id} AND status = 0
     </update>
 </mapper>

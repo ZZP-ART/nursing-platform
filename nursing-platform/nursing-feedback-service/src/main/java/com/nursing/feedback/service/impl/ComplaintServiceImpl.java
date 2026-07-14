@@ -19,6 +19,7 @@ import com.nursing.feedback.entity.ComplaintTrack;
 import com.nursing.feedback.integration.OrderQueryService;
 import com.nursing.feedback.repository.ComplaintMapper;
 import com.nursing.feedback.repository.ComplaintTrackMapper;
+import com.nursing.feedback.support.RequestFingerprint;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -61,10 +62,12 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
     @Transactional(rollbackFor = Exception.class)
     public ComplaintSubmitResponse submitComplaint(SubmitComplaintRequest request, Long userId, String idempotentKey) {
         String key = requireIdempotentKey(idempotentKey);
-        Complaint existing = complaintMapper.selectByIdempotentKey(key);
+        String content = requireContent(request.getContent());
+        String images = toJson(request.getImages());
+        String requestHash = RequestFingerprint.complaint(request);
+        Complaint existing = complaintMapper.selectByUserAndIdempotentKey(userId, key);
         if (existing != null) {
-            verifyComplaintOwner(existing, userId);
-            return new ComplaintSubmitResponse(existing.getId());
+            return replayExisting(existing, requestHash);
         }
 
         requireComplaintOrder(request.getOrderId(), userId);
@@ -75,20 +78,20 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
         complaint.setOrderId(request.getOrderId());
         complaint.setUserId(userId);
         complaint.setType(request.getType());
-        complaint.setContent(trimToNull(request.getContent()));
-        complaint.setImages(toJson(request.getImages()));
+        complaint.setContent(content);
+        complaint.setImages(images);
         complaint.setStatus(COMPLAINT_STATUS_PENDING);
         complaint.setIdempotentKey(key);
+        complaint.setRequestHash(requestHash);
         complaint.setIsDeleted(NOT_DELETED);
         complaint.setCreateTime(now);
         complaint.setUpdateTime(now);
         try {
             complaintMapper.insert(complaint);
         } catch (DuplicateKeyException ex) {
-            Complaint duplicate = complaintMapper.selectByIdempotentKey(key);
+            Complaint duplicate = complaintMapper.selectByUserAndIdempotentKey(userId, key);
             if (duplicate != null) {
-                verifyComplaintOwner(duplicate, userId);
-                return new ComplaintSubmitResponse(duplicate.getId());
+                return replayExisting(duplicate, requestHash);
             }
             throw ex;
         }
@@ -172,6 +175,13 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
         if (!Objects.equals(complaint.getUserId(), userId)) {
             throw new BusinessException(ApiCode.COMPLAINT_NO_PERMISSION, "No permission for this complaint");
         }
+    }
+
+    private ComplaintSubmitResponse replayExisting(Complaint complaint, String requestHash) {
+        if (!Objects.equals(complaint.getRequestHash(), requestHash)) {
+            throw new BusinessException(ApiCode.CONFLICT, "Idempotent-Key was reused with a different request");
+        }
+        return new ComplaintSubmitResponse(complaint.getId());
     }
 
     private ComplaintVO toComplaintVO(Complaint complaint) {
@@ -258,5 +268,13 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
             return null;
         }
         return value.trim();
+    }
+
+    private String requireContent(String content) {
+        String normalized = trimToNull(content);
+        if (normalized == null) {
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Complaint content is required");
+        }
+        return normalized;
     }
 }
