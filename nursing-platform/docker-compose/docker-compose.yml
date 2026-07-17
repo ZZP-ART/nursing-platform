@@ -8,9 +8,12 @@ services:
     ports:
       - "${NURSING_MYSQL_PORT:-13306}:3306"
     volumes:
-      - ./mysql/init:/docker-entrypoint-initdb.d
+      - ./nacos/mysql-schema.sql:/docker-entrypoint-initdb.d/03_nacos_schema.sql:ro
       - ../nursing-user-service/deploy/mysql/init/01_user_schema.sql:/docker-entrypoint-initdb.d/01_user_schema.sql:ro
       - ../nursing-catalog-service/deploy/mysql/init/02_catalog_schema.sql:/docker-entrypoint-initdb.d/02_catalog_schema.sql:ro
+      - ../nursing-order-service/deploy/mysql/init/03_order_schema.sql:/docker-entrypoint-initdb.d/03_order_schema.sql:ro
+      - ../nursing-feedback-service/deploy/mysql/init/04_feedback_database.sql:/docker-entrypoint-initdb.d/04_feedback_database.sql:ro
+      - ../nursing-operations-service/deploy/mysql/init/05_operations_schema.sql:/docker-entrypoint-initdb.d/05_operations_schema.sql:ro
       - mysql-data:/var/lib/mysql
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}"]
@@ -33,35 +36,22 @@ services:
       NURSING_ORDER_DB_PASSWORD: ${NURSING_ORDER_DB_PASSWORD:?NURSING_ORDER_DB_PASSWORD is required}
       NURSING_FEEDBACK_DB_USERNAME: ${NURSING_FEEDBACK_DB_USERNAME:?NURSING_FEEDBACK_DB_USERNAME is required}
       NURSING_FEEDBACK_DB_PASSWORD: ${NURSING_FEEDBACK_DB_PASSWORD:?NURSING_FEEDBACK_DB_PASSWORD is required}
+      NURSING_OPERATIONS_DB_USERNAME: ${NURSING_OPERATIONS_DB_USERNAME:?NURSING_OPERATIONS_DB_USERNAME is required}
+      NURSING_OPERATIONS_DB_PASSWORD: ${NURSING_OPERATIONS_DB_PASSWORD:?NURSING_OPERATIONS_DB_PASSWORD is required}
       NURSING_NACOS_DB_USERNAME: ${NURSING_NACOS_DB_USERNAME:?NURSING_NACOS_DB_USERNAME is required}
       NURSING_NACOS_DB_PASSWORD: ${NURSING_NACOS_DB_PASSWORD:?NURSING_NACOS_DB_PASSWORD is required}
-      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
-      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
-      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
-      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
     volumes:
       - ./db-bootstrap/bootstrap.sh:/bootstrap.sh:ro
+      - ../nursing-user-service/deploy/mysql/init/01_user_schema.sql:/user-schema.sql:ro
+      - ../nursing-order-service/deploy/mysql/init/03_order_schema.sql:/order-schema.sql:ro
+      - ../nursing-operations-service/deploy/mysql/init/05_operations_schema.sql:/operations-schema.sql:ro
+      - ../nursing-catalog-service/deploy/mysql/migration/20260716_repair_catalog_text.sql:/catalog-text-repair.sql:ro
+      - ../nursing-catalog-service/deploy/mysql/migration/20260717_add_merchant_service_lifecycle.sql:/merchant-service-lifecycle.sql:ro
+      - ../nursing-order-service/deploy/mysql/migration/20260717_repair_order_snapshot_text.sql:/order-text-repair.sql:ro
     command: ["sh", "/bootstrap.sh"]
     depends_on:
       mysql:
         condition: service_healthy
-    networks:
-      - nursing-net
-
-  schema-preflight:
-    image: mysql:8.0
-    restart: "no"
-    environment:
-      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
-      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
-      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
-      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
-    volumes:
-      - ./db-bootstrap/schema-preflight.sh:/schema-preflight.sh:ro
-    command: ["sh", "/schema-preflight.sh"]
-    depends_on:
-      db-bootstrap:
-        condition: service_completed_successfully
     networks:
       - nursing-net
 
@@ -111,28 +101,20 @@ services:
     networks:
       - nursing-net
 
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.7.2
-    container_name: nursing-zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    networks:
-      - nursing-net
-
   kafka:
     image: confluentinc/cp-kafka:7.7.2
     container_name: nursing-kafka
     restart: unless-stopped
-    depends_on:
-      - zookeeper
+    depends_on: []
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092
+      CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,PLAINTEXT_HOST://0.0.0.0:29092,CONTROLLER://0.0.0.0:9093
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
     ports:
@@ -145,6 +127,41 @@ services:
     networks:
       - nursing-net
 
+  dev-test-data:
+    image: mysql:8.0
+    profiles: ["seed"]
+    restart: "no"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
+      NURSING_SEED_CONFIRM: ${NURSING_SEED_CONFIRM:-false}
+    volumes:
+      - ./seed/dev-test-data.sql:/seed/dev-test-data.sql:ro
+    command: ["sh", "-c", "test \"$$NURSING_SEED_CONFIRM\" = true || { echo 'Set NURSING_SEED_CONFIRM=true to load development data' >&2; exit 1; }; mysql --default-character-set=utf8mb4 -h mysql -uroot --password=\"$$MYSQL_ROOT_PASSWORD\" < /seed/dev-test-data.sql"]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      db-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - nursing-net
+
+  nacos-config-bootstrap:
+    image: curlimages/curl:8.10.1
+    restart: "no"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NACOS_URL: http://nacos:8848
+      NURSING_NACOS_NAMESPACE: ${NURSING_NACOS_NAMESPACE:-}
+    volumes:
+      - ./nacos/config:/configs:ro
+      - ./nacos/bootstrap-nacos-config.sh:/bootstrap-nacos-config.sh:ro
+    entrypoint: ["sh", "/bootstrap-nacos-config.sh"]
+    depends_on:
+      nacos:
+        condition: service_healthy
+    networks:
+      - nursing-net
+
   gateway:
     build:
       context: ..
@@ -154,7 +171,6 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_REDIS_HOST: redis
       NURSING_REDIS_PORT: 6379
@@ -167,6 +183,8 @@ services:
         condition: service_healthy
       nacos:
         condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8080/actuator/health"]
       interval: 15s
@@ -193,7 +211,6 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_USER_DB_URL: ${NURSING_USER_DB_URL:?NURSING_USER_DB_URL is required}
       NURSING_DB_USERNAME: ${NURSING_USER_DB_USERNAME:?NURSING_USER_DB_USERNAME is required}
       NURSING_DB_PASSWORD: ${NURSING_USER_DB_PASSWORD:?NURSING_USER_DB_PASSWORD is required}
@@ -221,6 +238,8 @@ services:
         condition: service_healthy
       nacos:
         condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
       uploads-init:
         condition: service_completed_successfully
     healthcheck:
@@ -240,7 +259,6 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_CATALOG_DB_URL: ${NURSING_CATALOG_DB_URL:?NURSING_CATALOG_DB_URL is required}
       NURSING_DB_USERNAME: ${NURSING_CATALOG_DB_USERNAME:?NURSING_CATALOG_DB_USERNAME is required}
       NURSING_DB_PASSWORD: ${NURSING_CATALOG_DB_PASSWORD:?NURSING_CATALOG_DB_PASSWORD is required}
@@ -254,6 +272,8 @@ services:
         condition: service_completed_successfully
       nacos:
         condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8082/actuator/health"]
       interval: 15s
@@ -271,19 +291,15 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_ORDER_DB_URL: ${NURSING_ORDER_DB_URL:?NURSING_ORDER_DB_URL is required}
       NURSING_DB_USERNAME: ${NURSING_ORDER_DB_USERNAME:?NURSING_ORDER_DB_USERNAME is required}
       NURSING_DB_PASSWORD: ${NURSING_ORDER_DB_PASSWORD:?NURSING_ORDER_DB_PASSWORD is required}
-      NURSING_ORDER_MIGRATION_DB_USERNAME: ${NURSING_ORDER_MIGRATION_DB_USERNAME:?NURSING_ORDER_MIGRATION_DB_USERNAME is required}
-      NURSING_ORDER_MIGRATION_DB_PASSWORD: ${NURSING_ORDER_MIGRATION_DB_PASSWORD:?NURSING_ORDER_MIGRATION_DB_PASSWORD is required}
       NURSING_REDIS_HOST: redis
       NURSING_REDIS_PORT: 6379
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
       NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:?NURSING_INTERNAL_TOKEN is required}
-      NURSING_PAYMENT_MOCK: ${NURSING_PAYMENT_MOCK:-true}
     expose:
       - "8083"
     depends_on:
@@ -291,14 +307,14 @@ services:
         condition: service_healthy
       db-bootstrap:
         condition: service_completed_successfully
-      schema-preflight:
-        condition: service_completed_successfully
       redis:
         condition: service_healthy
       kafka:
         condition: service_healthy
       nacos:
         condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8083/actuator/health"]
       interval: 15s
@@ -316,12 +332,9 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
-      NURSING_NACOS_CONFIG_PREFIX: "optional:"
       NURSING_FEEDBACK_DB_URL: ${NURSING_FEEDBACK_DB_URL:?NURSING_FEEDBACK_DB_URL is required}
       NURSING_DB_USERNAME: ${NURSING_FEEDBACK_DB_USERNAME:?NURSING_FEEDBACK_DB_USERNAME is required}
       NURSING_DB_PASSWORD: ${NURSING_FEEDBACK_DB_PASSWORD:?NURSING_FEEDBACK_DB_PASSWORD is required}
-      NURSING_FEEDBACK_MIGRATION_DB_USERNAME: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:?NURSING_FEEDBACK_MIGRATION_DB_USERNAME is required}
-      NURSING_FEEDBACK_MIGRATION_DB_PASSWORD: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:?NURSING_FEEDBACK_MIGRATION_DB_PASSWORD is required}
       NURSING_NACOS_ADDR: nacos:8848
       NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
@@ -333,14 +346,51 @@ services:
         condition: service_healthy
       db-bootstrap:
         condition: service_completed_successfully
-      schema-preflight:
+      kafka:
+        condition: service_healthy
+      nacos:
+        condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8084/actuator/health"]
+      interval: 15s
+      retries: 10
+      start_period: 60s
+    networks:
+      - nursing-net
+
+  operations-service:
+    build:
+      context: ..
+      dockerfile: nursing-operations-service/Dockerfile
+    image: nursing/operations-service:local
+    container_name: nursing-operations-service
+    restart: unless-stopped
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      NURSING_OPERATIONS_DB_URL: ${NURSING_OPERATIONS_DB_URL:?NURSING_OPERATIONS_DB_URL is required}
+      NURSING_DB_USERNAME: ${NURSING_OPERATIONS_DB_USERNAME:?NURSING_OPERATIONS_DB_USERNAME is required}
+      NURSING_DB_PASSWORD: ${NURSING_OPERATIONS_DB_PASSWORD:?NURSING_OPERATIONS_DB_PASSWORD is required}
+      NURSING_NACOS_ADDR: nacos:8848
+      NURSING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      NURSING_GATEWAY_TRUSTED_TOKEN: ${NURSING_GATEWAY_TRUSTED_TOKEN:?NURSING_GATEWAY_TRUSTED_TOKEN is required}
+      NURSING_INTERNAL_TOKEN: ${NURSING_INTERNAL_TOKEN:?NURSING_INTERNAL_TOKEN is required}
+    expose:
+      - "8085"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      db-bootstrap:
         condition: service_completed_successfully
       kafka:
         condition: service_healthy
       nacos:
         condition: service_healthy
+      nacos-config-bootstrap:
+        condition: service_completed_successfully
     healthcheck:
-      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8084/actuator/health"]
+      test: ["CMD", "java", "-cp", "/app", "Healthcheck", "http://localhost:8085/actuator/health"]
       interval: 15s
       retries: 10
       start_period: 60s

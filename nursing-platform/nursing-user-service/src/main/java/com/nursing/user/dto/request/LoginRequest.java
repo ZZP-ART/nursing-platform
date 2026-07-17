@@ -18,6 +18,9 @@ public class LoginRequest {
     @Pattern(regexp = "^\\d{6}$", message = "验证码格式不正确")
     private String smsCode;
 
+    @Pattern(regexp = "^(CUSTOMER|CAREGIVER|MERCHANT_MEMBER|ADMIN)$", message = "targetRole is invalid")
+    private String targetRole;
+
     public String getPhone() {
         return phone;
     }
@@ -49,4 +52,7 @@ public class LoginRequest {
     public void setSmsCode(String smsCode) {
         this.smsCode = smsCode;
     }
+
+    public String getTargetRole() { return targetRole; }
+    public void setTargetRole(String targetRole) { this.targetRole = targetRole; }
 }

@@ -1,0 +1,20 @@
+server:
+  port: 8085
+spring:
+  datasource:
+    url: ${NURSING_OPERATIONS_DB_URL}
+    username: ${NURSING_DB_USERNAME}
+    password: ${NURSING_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  kafka:
+    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS}
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+nursing:
+  gateway:
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}
+  internal:
+    token: ${NURSING_INTERNAL_TOKEN}
+  snowflake:
+    worker-id: 5
+    datacenter-id: 1

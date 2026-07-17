@@ -1,6 +1,6 @@
 # catalog-service 接口说明
 
-> 基于当前实现整理。本文覆盖 `nursing-catalog-service` 显式定义的业务 HTTP 接口，不包含 Spring Boot Actuator 自动暴露的运维端点。
+> 基于当前实现整理。本文覆盖 `nursing-catalog-service` 显式定义的业务 HTTP 接口，不包含 Spring Boot Actuator 自动暴露的运维端点；其“服务约定、共用对象、逐接口请求与响应”结构作为本仓库微服务 API 文档的统一排版标准。
 
 ## 1. 服务约定
 
@@ -250,5 +250,5 @@ GET /api/v1/items?keyword=%E6%8E%A8%E6%8B%BF&categoryId=101&size=10
 ## 5. 兼容性说明
 
 - `id` 是项目和规格在 JSON 中的正式字段名；调用方不应依赖 Java 内部名称 `itemId` 或 `specId`。
-- 共享模块中的 `CatalogServiceFeignClient` 也请求 `GET /api/v1/items/{id}`。变更该响应字段时，需要同时验证其 `ServiceItemDTO` 反序列化兼容性。
+- 订单服务中的 `CatalogServiceFeignClient` 也请求 `GET /api/v1/items/{id}`。变更该响应字段时，需要同时验证其 `ServiceItemDTO` 反序列化兼容性。
 - 当前服务只读。分类、项目与规格的创建、修改、上下架、删除均没有 HTTP 实现，不能视为可调用接口。

@@ -2,7 +2,7 @@ package com.nursing.order.service.impl;
 
 import com.nursing.common.dto.ServiceItemDTO;
 import com.nursing.common.dto.ServiceSpecDTO;
-import com.nursing.common.feign.CatalogServiceFeignClient;
+import com.nursing.order.feign.CatalogServiceFeignClient;
 import com.nursing.common.result.Result;
 import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.order.dto.request.OrderCreateRequest;
@@ -37,6 +37,29 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class OrderServiceImplTest {
+    @Test
+    void internalOrderIncludesMerchantOwnership() {
+        IdempotentService idempotentService = mock(IdempotentService.class);
+        CatalogServiceFeignClient catalogClient = mock(CatalogServiceFeignClient.class);
+        UserAddressMapper addressMapper = mock(UserAddressMapper.class);
+        OrderHeaderMapper orderMapper = mock(OrderHeaderMapper.class);
+        OrderOperationLogMapper logMapper = mock(OrderOperationLogMapper.class);
+        OrderSequenceMapper sequenceMapper = mock(OrderSequenceMapper.class);
+        PaymentRecordMapper paymentMapper = mock(PaymentRecordMapper.class);
+        SnowflakeIdWorker snowflake = mock(SnowflakeIdWorker.class);
+        com.nursing.order.entity.OrderHeader order = new com.nursing.order.entity.OrderHeader();
+        order.setId(31002L);
+        order.setUserId(10001L);
+        order.setMerchantId(20001L);
+        order.setStatus(1);
+        when(orderMapper.selectById(31002L)).thenReturn(order);
+
+        OrderServiceImpl service = new OrderServiceImpl(idempotentService, catalogClient, addressMapper,
+                orderMapper, logMapper, sequenceMapper, paymentMapper, snowflake);
+
+        assertThat(service.getInternalOrder(31002L).getMerchantId()).isEqualTo(20001L);
+    }
+
     @Test
     void createOrderMatchesCatalogItem201Spec301() {
         IdempotentService idempotentService = mock(IdempotentService.class);
@@ -185,6 +208,30 @@ class OrderServiceImplTest {
 
         assertThat(response.getStatus()).isEqualTo(2);
         verifyNoInteractions(logMapper);
+    }
+
+    @Test
+    void confirmCompletionOnlyAfterCaregiverFinishedService() {
+        IdempotentService idempotentService = mock(IdempotentService.class);
+        CatalogServiceFeignClient catalogClient = mock(CatalogServiceFeignClient.class);
+        UserAddressMapper addressMapper = mock(UserAddressMapper.class);
+        OrderHeaderMapper orderMapper = mock(OrderHeaderMapper.class);
+        OrderOperationLogMapper logMapper = mock(OrderOperationLogMapper.class);
+        OrderSequenceMapper sequenceMapper = mock(OrderSequenceMapper.class);
+        PaymentRecordMapper paymentMapper = mock(PaymentRecordMapper.class);
+        SnowflakeIdWorker snowflake = mock(SnowflakeIdWorker.class);
+        com.nursing.order.entity.OrderHeader order = new com.nursing.order.entity.OrderHeader();
+        order.setId(90001L); order.setOrderNo("2026071390001"); order.setUserId(10001L); order.setStatus(9); order.setVersion(0);
+        when(orderMapper.selectById(90001L)).thenReturn(order);
+        when(orderMapper.updateStatusByIdVersion(90001L, 9, 2, 0, null)).thenReturn(1);
+        when(snowflake.nextId()).thenReturn(90002L);
+        OrderServiceImpl service = new OrderServiceImpl(idempotentService, catalogClient, addressMapper,
+                orderMapper, logMapper, sequenceMapper, paymentMapper, snowflake);
+
+        var response = service.completeOrder(10001L, 90001L);
+
+        assertThat(response.getStatus()).isEqualTo(2);
+        verify(logMapper).insert(any());
     }
 
     private OrderCreateRequest request() {

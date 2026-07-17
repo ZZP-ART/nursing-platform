@@ -15,6 +15,9 @@ public interface OrderHeaderMapper {
 
     List<OrderHeader> selectByIds(@Param("ids") List<Long> ids);
 
+    List<OrderHeader> selectByMerchantId(@Param("merchantId") Long merchantId,
+                                         @Param("status") Integer status);
+
     OrderHeader selectByIdAndUserId(@Param("id") Long id, @Param("userId") Long userId);
 
     OrderHeader selectByOrderNo(@Param("orderNo") String orderNo);

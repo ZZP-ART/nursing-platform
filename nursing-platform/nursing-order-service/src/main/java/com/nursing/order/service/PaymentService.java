@@ -196,7 +196,7 @@ public class PaymentService {
     @Transactional
     public PayResponse initiatePayment(Long userId, Long orderId, PayRequest request, String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey) || idempotentKey.length() > 128) {
-            throw new BusinessException(ORDER_PAY_INVALID, "Idempotent-Key is required");
+            throw new BusinessException(ORDER_PAY_INVALID, "Idempotency-Key is required");
         }
         if (paymentIntentMapper == null) return initiatePayment(userId, orderId, request);
         String hash = fingerprint(request.getPayChannel());
@@ -204,7 +204,7 @@ public class PaymentService {
         PaymentIntent existing = paymentIntentMapper.selectByUserKey(userId, idempotentKey);
         if (existing != null) {
             if (!Objects.equals(existing.getOrderId(), orderId) || !Objects.equals(existing.getRequestHash(), hash)) {
-                throw new BusinessException(com.nursing.common.constant.ApiCode.CONFLICT, "Idempotent-Key was reused with a different payment request");
+                throw new BusinessException(com.nursing.common.constant.ApiCode.CONFLICT, "Idempotency-Key was reused with a different payment request");
             }
             return replayIntent(order, request, existing);
         }

@@ -1,6 +1,8 @@
-# nursing-user-service 接口文档
+# nursing-user-service 接口说明
 
-## 公共约定
+> 本文采用 catalog-service 的“服务约定、共用对象、逐接口请求与响应”结构，覆盖当前 user-service 显式定义的业务 HTTP 接口。
+
+## 1. 服务约定
 
 ### 基础路径
 
@@ -65,7 +67,7 @@ Authorization: Bearer <jwt>
 
 Validation 框架产生的参数错误响应形态需确认；源码中未看到 user-service 专用的 `MethodArgumentNotValidException` 处理器。
 
-## 1. 发送短信验证码
+## 2. 发送短信验证码
 
 | 项目 | 内容 |
 |---|---|
@@ -131,11 +133,13 @@ Validation 框架产生的参数错误响应形态需确认；源码中未看到
 
 备注：数据库 `sms_record.code` 保存 BCrypt 哈希；Redis `sms:code:{smsType}:{phone}` 保存短 TTL 验证码。发送任务和 Outbox 事件在同一数据库事务内创建；Worker 异步调用供应商，供应商结果未知时状态为 `UNKNOWN` 且不会自动重发。
 
+## 3. 查询短信发送任务
+
 ### `GET /api/v1/users/sms-code/requests/{requestId}`
 
 仅用于首次响应丢失等异常恢复。必须携带创建该任务时相同的 `Idempotency-Key` 请求头；接口不返回手机号、验证码或供应商内部错误。响应 `data` 与发送接口一致，可据 `status` 判断任务是否已进入终态。
 
-### Provider callback contract (reserved)
+### 预留供应商回执契约（未实现 HTTP 路由）
 
 | Item | Contract |
 |---|---|
@@ -164,7 +168,7 @@ Request body:
 
 Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid payloads return HTTP `400`; failed provider-signature or service authentication returns HTTP `401` or `403`; no matching audit record returns HTTP `404`; an invalid or out-of-order state transition returns HTTP `409`. The eventual implementation records the receipt and a `sms_record_status_transition` row atomically. This repository does not expose the HTTP route until the required verifier is configured; an unauthenticated callback endpoint is intentionally not part of the API surface.
 
-## 2. 用户注册
+## 4. 用户注册
 
 | 项目 | 内容 |
 |---|---|
@@ -230,7 +234,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：成功后会写入 `user`、`user_token`，并写入 Redis Token 记录。
 
-## 3. 用户登录
+## 5. 用户登录
 
 | 项目 | 内容 |
 |---|---|
@@ -307,7 +311,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：登录成功会更新 `last_login_time` 并签发新 JWT。
 
-## 4. 用户登出
+## 6. 用户登出
 
 | 项目 | 内容 |
 |---|---|
@@ -349,7 +353,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：登出不会修改 JWT 本身；黑名单 key 为 `jwt:blacklist:{tokenId}`。
 
-## 5. 重置密码
+## 7. 重置密码
 
 | 项目 | 内容 |
 |---|---|
@@ -402,7 +406,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：成功后只更新密码，不主动拉黑历史 Token；是否需要重置密码后强制下线需确认。
 
-## 6. 查询个人资料
+## 8. 查询个人资料
 
 | 项目 | 内容 |
 |---|---|
@@ -453,7 +457,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：`idCard` 仅在存在时返回，且为脱敏值。
 
-## 7. 修改个人资料
+## 9. 修改个人资料
 
 | 项目 | 内容 |
 |---|---|
@@ -520,7 +524,7 @@ Successful processing returns HTTP `200` and `{ "accepted": true }`. Invalid pay
 
 备注：身份证号入库前加密；响应不返回身份证号。
 
-## 8. 上传文件
+## 10. 上传文件
 
 | 项目 | 内容 |
 |---|---|

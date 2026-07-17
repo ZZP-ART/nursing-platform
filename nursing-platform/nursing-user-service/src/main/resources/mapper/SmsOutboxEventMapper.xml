@@ -36,7 +36,7 @@
     <select id="selectPending" resultMap="SmsOutboxEventMap">
         SELECT <include refid="eventColumns"/>
         FROM sms_outbox_event
-        WHERE status = 0 AND next_execute_time &lt;= NOW()
+        WHERE status = 0 AND next_execute_time &lt;= #{now}
         ORDER BY next_execute_time ASC, create_time ASC
         LIMIT #{limit}
     </select>

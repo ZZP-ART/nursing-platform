@@ -81,7 +81,7 @@ public class SmsOutboxWorker {
     @Scheduled(fixedDelayString = "${nursing.sms.outbox-fixed-delay-millis:1000}")
     public void dispatchPending() {
         recoverStaleClaims();
-        smsOutboxEventMapper.selectPending(smsProperties.getOutboxBatchSize())
+        smsOutboxEventMapper.selectPending(smsProperties.getOutboxBatchSize(), LocalDateTime.now())
                 .forEach(this::claimAndDispatch);
     }
 

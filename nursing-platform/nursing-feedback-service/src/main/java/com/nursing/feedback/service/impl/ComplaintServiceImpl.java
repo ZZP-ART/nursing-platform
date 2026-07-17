@@ -144,11 +144,11 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
 
     private String requireIdempotentKey(String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey)) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is required");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotency-Key is required");
         }
         String key = idempotentKey.trim();
         if (key.length() > 64) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is too long");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotency-Key is too long");
         }
         return key;
     }
@@ -165,10 +165,18 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
             throw new BusinessException(ApiCode.FORBIDDEN, "No permission for this order");
         }
         Integer status = order.getStatus();
-        if (!Integer.valueOf(OrderStatus.WAITING_SERVICE.getValue()).equals(status)
-                && !Integer.valueOf(OrderStatus.COMPLETED.getValue()).equals(status)) {
+        if (!isComplaintAllowedStatus(status)) {
             throw new BusinessException(ApiCode.BIZ_ERROR, "Order status cannot be complained");
         }
+    }
+
+    private boolean isComplaintAllowedStatus(Integer status) {
+        return Integer.valueOf(OrderStatus.PENDING_DISPATCH.getValue()).equals(status)
+                || Integer.valueOf(OrderStatus.ASSIGNED.getValue()).equals(status)
+                || Integer.valueOf(OrderStatus.ACCEPTED.getValue()).equals(status)
+                || Integer.valueOf(OrderStatus.IN_SERVICE.getValue()).equals(status)
+                || Integer.valueOf(OrderStatus.PENDING_CUSTOMER_CONFIRMATION.getValue()).equals(status)
+                || Integer.valueOf(OrderStatus.COMPLETED.getValue()).equals(status);
     }
 
     private void verifyComplaintOwner(Complaint complaint, Long userId) {
@@ -179,7 +187,7 @@ public class ComplaintServiceImpl implements com.nursing.feedback.service.Compla
 
     private ComplaintSubmitResponse replayExisting(Complaint complaint, String requestHash) {
         if (!Objects.equals(complaint.getRequestHash(), requestHash)) {
-            throw new BusinessException(ApiCode.CONFLICT, "Idempotent-Key was reused with a different request");
+            throw new BusinessException(ApiCode.CONFLICT, "Idempotency-Key was reused with a different request");
         }
         return new ComplaintSubmitResponse(complaint.getId());
     }

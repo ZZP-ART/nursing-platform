@@ -14,6 +14,7 @@ public class GatewayJwtProperties {
             "/api/v1/users/register",
             "/api/v1/users/login",
             "/api/v1/users/password/reset",
+            "/api/v1/admin/login",
             "/api/v1/categories/**",
             "/api/v1/items/**",
             "/api/v1/orders/pay/callback"

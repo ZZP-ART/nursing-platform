@@ -1,263 +1,213 @@
-# nursing-user-service 业务说明
+# nursing-user-service 接口实现逻辑
 
-## 服务定位
+> 本文按 `nursing-catalog-service` 的文档结构说明当前源码的调用链、校验、数据写入与边界行为，并与 `nursing-user-service_API.md` 一一对应。
 
-`nursing-user-service` 是互联网+智慧护理平台的用户域服务，负责用户注册登录、短信验证码、JWT 登录态、个人资料维护、身份证敏感信息加密、文件上传与上传幂等控制。服务通过网关对外提供用户与文件上传接口，内部使用 MySQL 持久化用户、短信、Token 与上传记录，使用 Redis 承担验证码缓存、短信限流、Token 在线记录和黑名单。
+## 1. 架构与通用规则
 
-当前模块在仓库中的路径为 `nursing-platform/nursing-user-service`，对应用户所称的 user-service。
-
-## 业务背景
-
-护理平台需要为移动端用户提供账号体系和基础身份资料能力。用户可通过手机号注册、密码或短信验证码登录，登录后维护头像、昵称、性别、身份证号等资料，并上传头像、评价图片、投诉图片等业务文件。由于短信和文件上传容易受到重复提交、重试和并发请求影响，本服务在短信发送、验证码校验、个人资料更新、文件上传等场景中加入了限流、乐观锁、幂等和去重能力。
-
-## 核心功能
-
-- 短信验证码：支持注册、登录、重置密码三类验证码，按手机号和 IP 做 Redis 原子限流。
-- 用户注册：手机号 + 注册验证码 + 密码注册，默认昵称为 `用户` + 手机号后四位。
-- 用户登录：支持密码登录和短信验证码登录，成功后签发 JWT。
-- 用户登出：将 JWT `tokenId` 写入 Redis 黑名单，TTL 与 Token 剩余有效期一致。
-- 密码重置：通过重置密码验证码修改密码，并禁止新旧密码相同。
-- 个人资料：查询当前用户资料，更新昵称、头像、性别、身份证号。
-- 乐观锁：个人资料更新要求传入 `version`，避免并发覆盖。
-- 文件上传：支持头像、评价图片、投诉图片上传，校验大小、扩展名和 Content-Type。
-- 上传幂等与去重：通过 `Idempotent-Key`、数据库幂等记录和 SHA-256 文件哈希处理重试与重复上传。
-- 敏感信息保护：身份证号使用 AES-GCM 加密入库，响应时脱敏。
-
-## 主要业务流程
-
-### 短信验证码
-
-1. 校验手机号和短信类型，短信类型包括 `register`、`login`、`reset_password`。
-2. 根据业务类型校验手机号状态：注册验证码要求手机号未注册，登录和重置密码验证码要求手机号已注册。
-3. 解析客户端 IP，优先读取 `X-Forwarded-For`，其次 `X-Real-IP`，最后使用远端地址。
-4. 通过 Redis Lua 脚本原子检查并占用短信发送额度：同手机号同类型发送间隔、手机号日限、IP 小时限、IP 日限。
-5. 校验 `Idempotency-Key`，在同一数据库事务内创建 `sms_send_request` 和 `sms_outbox_event`；相同键重试直接返回既有任务状态。
-6. 定时 Worker 领取 Outbox 事件后生成 6 位数字验证码，写入 `sms_record` 待发送记录，验证码在数据库中保存 BCrypt 哈希。
-7. Worker 调用阿里云。成功后将验证码写入 Redis 并标记任务为供应商已受理；明确失败会释放冷却键，超时或结果未知标记为 `UNKNOWN` 且不会自动重发。
-8. 校验验证码时通过 Redis Lua 原子完成比较、错误计数和一次性消费；成功后将最近一条短信记录标记为已验证。
-
-### 注册与登录
-
-注册流程先检查手机号是否已存在，再校验 `register` 类型验证码，使用 BCrypt 加密密码，写入 `user` 表并签发 JWT。登录流程先按手机号查询用户并检查账号状态，密码登录使用 BCrypt 校验密码，短信登录校验 `login` 类型验证码，成功后更新最后登录时间并签发 JWT。
-
-JWT 中包含 `jti/tokenId`、`sub/userId`、`userId`、`phone`、签发时间和过期时间。服务会将 Token 审计记录写入 `user_token`，并在 Redis 写入 `user:token:{userId}:{tokenId}`。
-
-### 鉴权与登出
-
-受保护接口包括查询资料、修改资料、登出和文件上传。默认生产模式更偏向由网关鉴权后转发：请求需携带可信网关头 `X-Gateway-Token` 和 `X-User-Id`，服务只使用服务端注入的用户身份。开发环境或显式开启 `nursing.auth.allow-local-token-validation=true` 时，服务也可以直接校验 `Authorization: Bearer <token>`。
-
-登出时服务解析 Authorization 中的 JWT，将 `tokenId` 写入 `jwt:blacklist:{tokenId}`。本地 Token 校验会拒绝已在黑名单中的 Token。
-
-### 个人资料维护
-
-查询个人资料返回脱敏手机号、昵称、头像、性别、状态、资料版本、脱敏身份证号、最后登录时间和创建时间。修改资料时必须提交当前 `version`；服务按 `id + version + is_deleted=0` 条件更新资料，并将 `version` 加 1。若版本不一致但提交内容与当前资料完全相同，视为重复提交并返回当前资料；若内容不同，返回版本冲突。
-
-身份证号入库前会校验 18 位格式和校验位，并使用 AES-GCM 加密，响应时只返回脱敏结果。
-
-### 文件上传
-
-文件上传接口要求登录身份、`Idempotent-Key`、`file` 和 `bizType`。服务先校验业务类型、幂等键、文件大小、扩展名和 Content-Type，然后将文件暂存到上传目录的 `.tmp/{userId}`，计算 SHA-256。幂等记录键为 `fu:{userId}:{Idempotent-Key}`，状态为处理中或已完成。
-
-同一用户、同一幂等键、同一文件内容重复请求会返回同一上传结果；同一幂等键但文件内容或业务类型不同会返回冲突；同一用户、同一业务类型、同一 SHA-256 和扩展名的文件会复用已有文件记录，避免重复落盘。
-
-## 角色与权限说明
-
-源码中未定义后台角色或 RBAC 权限模型。当前权限边界为“匿名接口”和“登录用户接口”：
-
-| 权限类别 | 接口范围 | 说明 |
-|---|---|---|
-| 匿名可访问 | 发送验证码、注册、登录、重置密码 | 不要求登录态 |
-| 登录用户 | 登出、查询资料、修改资料、文件上传 | 需要网关注入身份或本服务校验 Bearer Token |
-
-## 关键数据模型
-
-| 表 | 说明 | 关键字段 |
-|---|---|---|
-| `user` | 用户账号与资料 | `id`、`phone`、`password`、`nickname`、`avatar`、`gender`、`id_card`、`status`、`last_login_time`、`is_deleted`、`version` |
-| `user_token` | 已签发 Token 审计 | `id`、`user_id`、`token`、`expire_time`、`is_deleted`、`create_time` |
-| `sms_record` | 短信发送与验证审计 | `phone`、`sms_type`、`code`、`status`、`request_ip`、`provider`、`provider_request_id`、`failure_reason`、`send_time`、`expire_time`、`verify_time` |
-| `idempotent_record` | 上传幂等控制 | `idempotent_key`、`biz_type`、`biz_id`、`status`、`expire_time` |
-| `file_upload_record` | 文件上传结果与去重索引 | `user_id`、`idempotent_key`、`biz_type`、`file_hash`、`file_name`、`file_url`、`relative_path`、`file_size`、`content_type`、`file_ext` |
-
-主要状态值：
-
-| 字段 | 值 | 含义 |
-|---|---:|---|
-| `user.status` | 0 | 正常 |
-| `user.status` | 1 | 禁用 |
-| `sms_record.status` | 0 | 待发送 |
-| `sms_record.status` | 1 | 已发送 |
-| `sms_record.status` | 2 | 发送失败 |
-| `sms_record.status` | 3 | 已验证 |
-| `sms_record.status` | 5 | 结果未知 |
-| `idempotent_record.status` | 0 | 处理中 |
-| `idempotent_record.status` | 1 | 已完成 |
-
-## 外部依赖
-
-| 依赖 | 用途 |
-|---|---|
-| MySQL | 保存用户、短信、Token、幂等和文件上传记录 |
-| Redis | 短信验证码缓存、短信限流计数、验证码错误计数、Token 在线记录、Token 黑名单 |
-| Nacos Discovery / Config | 服务发现与配置中心 |
-| Gateway | 统一入口、路由转发、可信身份头注入 |
-| 阿里云短信服务 | 发送短信验证码 |
-| 本地文件系统 | 保存上传文件，默认目录由 `nursing.file.upload-dir` 指定 |
-
-## 配置说明
-
-| 配置项 | 默认值 | 说明 |
-|---|---|---|
-| `server.port` | `8081` | 服务端口 |
-| `spring.datasource.url` | `jdbc:mysql://mysql:3306/user_db...` | 用户库连接 |
-| `spring.data.redis.host` | `redis` | Redis 主机 |
-| `spring.cloud.nacos.discovery.server-addr` | `nacos:8848` | Nacos 注册中心地址 |
-| `nursing.auth.allow-local-token-validation` | `false` | 是否允许服务本地校验 Bearer Token |
-| `nursing.gateway.trusted-token` | 空 | 网关注入可信令牌 |
-| `nursing.jwt.secret` | 空 | JWT HS256 密钥，至少 32 bytes |
-| `nursing.jwt.expire-seconds` | `604800` | JWT 有效期，默认 7 天 |
-| `nursing.security.id-card-key` | 空 | 身份证 AES-GCM 密钥，需 32 bytes 或 `base64:` 格式 |
-| `nursing.sms.rate-limit-seconds` | `60` | 同手机号同类型短信发送间隔 |
-| `nursing.sms.phone-daily-limit` | `10` | 同手机号每日发送上限 |
-| `nursing.sms.ip-hourly-limit` | `60` | 同 IP 每小时发送上限 |
-| `nursing.sms.ip-daily-limit` | `300` | 同 IP 每日发送上限 |
-| `nursing.sms.verify-max-attempts` | `5` | 同一验证码最大错误次数 |
-| `nursing.sms.expire-seconds` | `300` | 验证码有效期 |
-| `nursing.sms.mock.code` | `123456` | 模拟短信固定验证码，可通过 `NURSING_SMS_MOCK_CODE` 覆盖 |
-| `nursing.file.upload-dir` | `uploads` | 上传文件落盘目录 |
-| `nursing.file.public-base-url` | `http://gateway:8080/uploads` | 对外访问 URL 前缀 |
-| `nursing.snowflake.worker-id` | `1` | 雪花算法 workerId |
-| `nursing.snowflake.datacenter-id` | `1` | 雪花算法 datacenterId |
-
-## 启动与部署说明
-
-本项目为 Maven 多模块工程，父项目使用 Spring Boot 3.5.0 和 Java 21。用户服务模块依赖 `nursing-common`。
-
-本地开发常用方式：
-
-```bash
-cd nursing-platform
-mvn -pl nursing-user-service -am spring-boot:run -Dspring-boot.run.profiles=dev
+```text
+Gateway -> Controller -> User/Sms/File Service -> MyBatis Mapper -> user_db
+                                      |-> Redis
+                                      |-> SMS outbox worker -> SMS provider
+                                      |-> local file system
 ```
 
-打包方式：
+匿名接口为短信发送、注册、登录、重置密码；登出、资料和上传接口通过 `UserTokenInterceptor` 取得可信身份。默认模式要求网关注入 `X-Gateway-Token` 与 `X-User-Id`；仅开启 `nursing.auth.allow-local-token-validation` 时，服务才自行验证 Bearer JWT。
 
-```bash
-cd nursing-platform
-mvn -pl nursing-user-service -am -DskipTests package
+所有成功结果通过 `Result.success` 返回。`GlobalExceptionHandler` 将 Bean Validation 错误转换为 HTTP `400`、`code=1000`，将业务异常转换为其声明的状态和业务码。
+
+## 2. `POST /api/v1/users/sms-code`
+
+### 调用链
+
+```text
+SmsController.sendSmsCode
+  -> SmsService.sendSmsCode
+    -> UserMapper / SmsSendRequestMapper
+    -> Redis Lua rate limiter
+    -> sms_send_request + sms_outbox_event
+  -> Result<SmsCodeResponse>
 ```
 
-Docker 镜像运行时基于 Eclipse Temurin 21 JRE，暴露 `8081`，健康检查地址为 `/actuator/health`。Dockerfile 默认将上传目录设为 `/app/data/uploads`。docker-compose 中 `user-service` 依赖 MySQL、Redis、Nacos，并通过网关对外访问。
+### 执行步骤
 
-数据库初始化脚本位于 `deploy/mysql/init/01_user_schema.sql`，会创建 `user_db` 及用户服务所需表。
+1. 校验手机号、短信类型和 UUID 形式的 `Idempotency-Key`；`register` 要求用户不存在，`login` 与 `reset_password` 要求用户存在。
+2. 解析 `X-Forwarded-For`、`X-Real-IP` 或远端地址作为请求 IP。
+3. 同一幂等键且请求内容相同则回放已有请求；内容不同返回冲突。
+4. 首次请求在一个事务内创建发送请求和 Outbox 事件，并通过 Redis Lua 原子占用手机号冷却、手机号日额度、IP 小时额度和 IP 日额度。
+5. 接口立即返回 `PENDING`。Worker 领取 Outbox 后生成六位验证码、写入 BCrypt 哈希的 `sms_record`，再调用短信发送器。
+6. 发送受理成功后才把明文验证码写入 Redis（默认 300 秒）；明确失败释放冷却键；未知结果记为 `UNKNOWN`，不自动重发。
 
-## 接口级实现细节（以当前源码为准）
+### 边界与可靠性
 
-本节补充 Controller、DTO、Service、Mapper 和网关代码实际执行的顺序。`Result<T>` 的成功响应固定为 `code: 0`；Bean Validation 失败由 `nursing-common` 统一返回 HTTP `400`、`code: 1000`，消息为所有字段错误以分号拼接后的结果。
+- 验证码明文不会写入数据库、Outbox 或日志。
+- 相同业务重试必须复用幂等键；限流键由 Lua 脚本原子处理，避免并发绕过额度。
+- 供应商回执 HTTP 路由当前未实际暴露，不能作为客户端接口调用。
 
-### 认证与身份注入
+## 3. `GET /api/v1/users/sms-code/requests/{requestId}`
 
-| 路由 | 是否受保护 | 身份来源及实际校验 |
-|---|---|---|
-| `POST /api/v1/users/sms-code` | 否 | 无需登录。 |
-| `POST /api/v1/users/register` | 否 | 无需登录。 |
-| `POST /api/v1/users/login` | 否 | 无需登录。 |
-| `POST /api/v1/users/password/reset` | 否 | 无需登录。 |
-| `POST /api/v1/users/logout` | 是 | 需网关注入有效 `X-Gateway-Token`、正整数 `X-User-Id`，或显式开启本地 JWT 校验。另必须携带 `Authorization: Bearer <JWT>`，用于定位待拉黑 Token。 |
-| `GET/PATCH /api/v1/users/profile` | 是 | 拦截器把可信身份写入请求属性 `userId`；Controller 不接受客户端传入的用户 ID。 |
-| `POST /api/v1/files/upload` | 是 | 与资料接口相同的身份注入规则。 |
+### 调用链
 
-默认情况下，本服务拒绝未携带可信网关标识的受保护请求（HTTP `403`、`code: 1004`）。仅当 `nursing.auth.allow-local-token-validation=true` 时，才会自行校验 Bearer JWT 的签名、有效期和 Redis 黑名单。网关会先清除客户端伪造的 `X-User-Id`、`X-UserId`、`userId` 与 `X-Gateway-Token`，校验 JWT/黑名单后再注入可信请求头；重复登出允许通过网关，随后仍会执行本服务的拉黑逻辑。
+```text
+SmsController.querySmsRequest -> SmsService.querySmsRequest -> SmsSendRequestMapper
+```
 
-### `POST /api/v1/users/sms-code`
+### 执行步骤
 
-请求体必须为 `phone` 和 `smsType`，请求头必须携带 UUID 格式的 `Idempotency-Key`：手机号严格匹配 `^1\d{10}$`，类型只能是 `register`、`login` 或 `reset_password`。实现按以下顺序执行：
+1. 用路径中的 `requestId` 和请求头中的 `Idempotency-Key` 查询发送请求。
+2. 仅密钥匹配时返回与发送接口相同的任务状态对象。
 
-1. 查询 `user` 表（排除逻辑删除记录）。`register` 要求用户不存在；`login`、`reset_password` 要求用户存在，否则分别返回 HTTP `422`、`2003` 或 `2004`。
-2. 解析请求 IP：取 `X-Forwarded-For` 第一个逗号分隔值；该值为空、`unknown` 或超过 45 字符时再取 `X-Real-IP`；仍不可用时取远端地址，最后使用字符串 `unknown`。这些头本身未校验请求是否来自可信代理。
-3. 以 `Idempotency-Key` 查询 `sms_send_request`。同键同请求直接回放已有 `requestId` 和状态；同键但手机号或类型不一致返回 HTTP `409`、`2019`。
-4. 首次请求在一个数据库事务内写入 `sms_send_request(status=0)` 与 `sms_outbox_event(status=0)`；同一事务中执行 Redis Lua 原子检查并占用 `sms:rate:{type}:{phone}`、手机号自然日额度、IP 自然小时额度和 IP 自然日额度。默认分别是 60 秒、10 次/日、60 次/小时、300 次/日。
-5. 事务提交后接口立即返回受理结果，包含 `requestId` 和 `PENDING` 状态。前端开始倒计时，不需要轮询。
-6. 定时 Worker 原子领取 Outbox 事件，再生成六位验证码、写入 `sms_record(status=0)`，并由模拟发送器受理。验证码明文不写入 Outbox 或日志。
-7. 供应商明确成功时，Worker 将验证码写入 `sms:code:{type}:{phone}`（默认 TTL 300 秒），把短信记录更新为 `status=1`，并将发送请求更新为 `SENT_ACCEPTED`。明确失败时请求更新为 `FAILED` 且释放同手机号同类型冷却键；超时、进程租约到期等结果未知时更新为 `UNKNOWN`，不自动重发。
+### 边界与可靠性
 
-`GET /api/v1/users/sms-code/requests/{requestId}` 仅用于首次响应丢失等异常恢复，且要求携带创建请求时相同的 `Idempotency-Key`。该接口不返回手机号、验证码或发送器内部错误。
+- 用于首次成功响应丢失后的恢复，不返回手机号、验证码或供应商内部错误。
+- 前端不应轮询该接口作为正常的短信倒计时机制。
 
-验证码校验由注册、短信登录和重置密码内部调用，而不是独立 HTTP 接口：
+## 4. `POST /api/v1/users/register`
 
-- Redis Lua 脚本原子读取验证码、检查错误次数、比较输入并在成功时删除验证码和错误计数；键不存在即 HTTP `400`、`2007`。
-- 前五次错误均返回 `2006` 并累加；第六次请求发现计数已达到默认上限 5，脚本删除验证码和错误计数并返回 `2006`。
-- 验证成功后把同手机号、同类型、`status=1` 且 `send_time` 最新的一条短信记录更新为 `status=3`、写入 `verify_time`。该更新不是按 Redis 验证码对应的记录 ID 进行。
+### 调用链
 
-### `POST /api/v1/users/register`
+```text
+UserController.register -> UserService.register -> SmsService.verifyCode -> UserMapper -> JWT service
+```
 
-请求体为 `phone`、`smsCode`、`password`，可选 `nickname`。验证码必须六位；密码必须 8-32 个字符并同时包含字母和数字；昵称提供时长度必须为 2-16。事务内先查手机号、再校验 `register` 验证码，然后写入 `user`：Snowflake ID、BCrypt 密码、`gender=0`、`status=0`、`is_deleted=0`、`version=0`。未提供昵称时写入 `用户` 加手机号后四位。数据库唯一键竞争会转换为 HTTP `409`、`2008`。
+### 执行步骤
 
-插入成功后立即签发 JWT 并返回 HTTP `201`。JWT 使用 HS256，包含 `jti`、`sub`、`userId`、`phone`、签发时间和过期时间；默认有效期 604800 秒。签发同时把原始 JWT 写入 `user_token`，并写入 Redis `user:token:{userId}:{tokenId}`，TTL 与 JWT 有效期一致。注册流程当前不写 `user.register_ip`。
+1. 校验手机号、六位注册验证码、密码强度和可选昵称。
+2. 在事务中确认手机号未注册，消费 `register` 类型验证码。
+3. 使用雪花 ID 和 BCrypt 密码创建用户；未提供昵称时使用“用户”加手机号后四位。
+4. 签发 HS256 JWT，同时写入 `user_token` 与 Redis 在线 Token 键，返回 HTTP `201`。
 
-### `POST /api/v1/users/login`
+### 边界与可靠性
 
-请求体要求 `phone` 和 `loginMode`；`loginMode` 只能为 `password` 或 `sms`。密码模式还必须传非空 `password`，短信模式还必须传非空六位 `smsCode`。服务先查询用户并确认 `status != 1`；不存在返回 HTTP `422`、`2004`，禁用返回 HTTP `422`、`2011`。密码模式使用 BCrypt 比对失败返回 HTTP `400`、`2010`；短信模式校验 `login` 类型验证码。
+- 数据库手机号唯一键竞争会转换为 `2008`，而不是创建重复账号。
+- 注册不写 `register_ip`，也不创建后台角色或 RBAC 数据。
 
-认证成功后更新 `user.last_login_time` 和 `update_time`，并按注册接口相同规则签发和持久化一个新 JWT，返回 HTTP `200`。响应中的用户手机号会掩码为前三位加 `****` 加后四位；不返回密码或明文身份证号。
+## 5. `POST /api/v1/users/login`
 
-### `POST /api/v1/users/logout`
+### 调用链
 
-Controller 直接从 `Authorization` 头取得 Bearer Token 并解析 JWT；格式错误、签名无效或过期时返回 HTTP `401`、`1002`。对未过期 Token，将 `jti` 写入 Redis `jwt:blacklist:{tokenId}`，值为 `1`，TTL 为剩余有效期。登出不删除 `user_token` 表记录，也不撤销同一用户的其它 Token。已过期 Token 没有可写入的黑名单 TTL。
+```text
+UserController.login -> UserService.login -> UserMapper + BCrypt/SmsService -> JWT service
+```
 
-### `POST /api/v1/users/password/reset`
+### 执行步骤
 
-请求体为 `phone`、六位 `smsCode`、`newPassword`；新密码使用与注册一致的 8-32 位字母加数字规则。事务内查询用户，校验 `reset_password` 验证码，拒绝与 BCrypt 旧密码相同的新密码（HTTP `400`、`2012`），随后只更新密码哈希和更新时间。该流程不会拉黑或删除历史 JWT，因此已签发且未过期的 Token 在当前实现中仍可继续使用。
+1. 根据 `loginMode` 分支处理密码或短信登录，并读取未逻辑删除用户。
+2. 检查用户存在且未禁用；密码模式调用 BCrypt，短信模式消费 `login` 验证码。
+3. 更新最后登录时间，签发并持久化新 JWT，返回掩码手机号的用户信息。
 
-### `GET /api/v1/users/profile`
+### 边界与可靠性
 
-从受保护请求的 `userId` 查询未逻辑删除用户；不存在返回 HTTP `401`、`1002`，禁用用户返回 HTTP `422`、`2011`。成功返回掩码手机号、昵称、头像、性别、状态、资料版本、最后登录时间、创建时间和掩码身份证号。身份证号存储值若以 `enc:v1:` 开头，会先以 AES-256-GCM 解密，再返回前三位、11 个星号和后四位。
+- 密码错误、验证码错误、账号不存在和禁用账号使用不同业务码。
+- 登录会新增 Token，不会撤销同一用户的其他有效 Token。
 
-### `PATCH /api/v1/users/profile`
+## 6. `POST /api/v1/users/logout`
 
-请求体必须有非负 `version`；`nickname` 传入时长度为 2-16，`avatar` 最大 256 字符，`gender` 为 0-2，`idCard` 传入时长度为 18。服务还会校验身份证号的日期格式和校验位，失败返回 HTTP `422`、`2013`。非空身份证号以随机 12 字节 IV 的 AES-256-GCM 加密为 `enc:v1:{base64-IV}:{base64-ciphertext}` 后入库；生产环境未配置 32 字节密钥将启动失败。
+### 调用链
 
-更新以 `id + version + is_deleted=0` 为条件，并将版本加一。版本不同但请求中**实际提供的字段**都与当前值一致时，直接返回当前资料，视为幂等重试；版本相同且内容相同也不执行更新。其余版本冲突返回 HTTP `409`、`2016`。更新竞争失败后会重新读取并以同样规则判断是否已被并发请求写成相同内容。
+```text
+UserController.logout -> UserService.logout -> JWT parser -> Redis blacklist
+```
 
-### `POST /api/v1/files/upload`
+### 执行步骤
 
-这是 multipart 接口，要求 `Idempotent-Key` 请求头、`file` 和 `bizType` 表单字段。`Idempotent-Key` 不能为空且最长 64 字符；`bizType` 只允许 `avatar`、`review_image`、`complaint_image`。文件不能为空，最大 10 MiB；扩展名只允许 `jpg`、`jpeg`、`png`、`gif`、`mp4`。若请求带 `Content-Type`，它必须分别精确匹配 `image/jpeg`、`image/png`、`image/gif` 或 `video/mp4`；未提供 Content-Type 时，仅按扩展名通过。
+1. 从 `Authorization: Bearer <JWT>` 提取并验证 JWT。
+2. 将 `jti` 写入 `jwt:blacklist:{tokenId}`，TTL 为 Token 剩余有效期。
+3. 返回成功结果。
 
-服务将文件流写入 `{uploadDir}/.tmp/{userId}` 并计算 SHA-256，再以 `fu:{userId}:{Idempotent-Key}` 创建 24 小时的 `idempotent_record(status=0)`。已存在同键记录会加锁读取：仍在处理中或找不到关联上传记录时返回 HTTP `409`、`2018`；同键但用户、业务类型、哈希、扩展名或大小任一不同则返回 HTTP `409`、`2017`；完全相同则直接返回原上传结果。
+### 边界与可靠性
 
-新请求会先按 `(userId, bizType, sha256, extension)` 查重；命中则复用已有记录。未命中时把文件移动到 `{uploadDir}/{bizType}/{userId}/{hash前两位}/{sha256}.{ext}`，生成 `fileUrl`，写入 `file_upload_record`，再把幂等记录更新为完成并关联上传记录 ID。无论成功或失败都会尽力删除暂存文件；但事务无法与文件系统移动组成原子提交，且 `idempotent_record.expire_time` 目前没有源码内清理任务。
+- 登出不删除 `user_token` 审计记录，也不撤销其他设备 Token。
+- 过期 Token 没有可用 TTL，格式或签名错误均返回未授权。
 
-## 开发与维护注意事项
+## 7. `POST /api/v1/users/password/reset`
 
-- 接口文档应以 Controller、DTO、Service、Mapper 和 SQL 脚本为准，旧计划文档不能直接作为实现依据。
-- 生产环境必须配置 `NURSING_JWT_SECRET`，且长度不少于 32 bytes。
-- 生产环境使用身份证加密时必须配置 32 bytes 的 `NURSING_ID_CARD_ENCRYPTION_KEY`，否则 `prod` profile 启动会失败。
-- 当前仅提供模拟短信发送器；服务不会读取或使用第三方短信凭据。
-- 默认模式下受保护接口依赖网关注入身份；若绕过网关直接调用，需要开启本地 Token 校验。
-- 文件上传必须携带 `Idempotent-Key`。前端重试同一次上传应复用同一个 key，不同文件或不同上传槽位应使用不同 key。
-- 上传文件按 SHA-256 和业务类型去重，删除或替换文件的业务语义目前不在本服务内实现。
-- `idempotent_record.expire_time` 当前用于记录过期时间，但源码未看到自动清理任务，需由运维或后续任务处理历史记录清理。
-- `user.register_ip` 表字段存在，但当前注册流程未写入注册 IP。
+### 调用链
 
-## 已知限制或需确认事项
+```text
+UserController.resetPassword -> UserService.resetPassword -> SmsService.verifyCode -> UserMapper
+```
 
-- 需确认生产环境中网关是否已统一完成 JWT 校验并注入 `X-Gateway-Token`、`X-User-Id`。
-- 需确认上传文件的静态资源映射或网关转发规则；本服务生成 `fileUrl`，但源码中未看到静态文件访问 Controller。
-- 需确认短信模板参数是否统一为 `{"code":"验证码"}`，当前阿里云调用固定只传 `code`。
-- 需确认是否需要短信发送记录过期状态自动维护；当前源码未看到将过期短信记录更新为 `status=4` 的任务。
-- 需确认 `idempotent_record` 和历史上传临时文件的清理策略。
-- 需确认是否需要多端登录、Token 主动失效、账号注销、后台禁用用户等更完整账号生命周期能力。
+### 执行步骤
 
-## 文档不足与后续补充清单
+1. 校验手机号、重置验证码与新密码格式。
+2. 查询用户并消费 `reset_password` 验证码。
+3. 拒绝与 BCrypt 旧密码匹配的新密码，随后更新密码哈希和更新时间。
 
-本文档已基于 `nursing-user-service` 当前源码、模块配置、数据库脚本和现有 docs 整理完成，但以下内容无法仅通过 user-service 单模块源码得到最终答案。后续如果要形成跨服务级别的最终结论，需要补充核对相关微服务、部署配置或产品规则。
+### 边界与可靠性
 
-| 待补充内容 | 当前 user-service 可确认的信息 | 还需核对的来源 |
-|---|---|---|
-| Validation 参数错误响应格式 | DTO 使用 Jakarta Validation 注解，但 user-service 内未看到专用参数异常处理器 | `nursing-common` 全局异常处理、网关异常包装、实际接口联调结果 |
-| 生产网关鉴权与身份注入 | `UserTokenInterceptor` 支持可信网关头 `X-Gateway-Token`、`X-User-Id`，也支持本地 Bearer Token 校验开关 | `nursing-gateway` JWT Filter、路由配置、生产环境变量 |
-| 文件 URL 访问方式 | 上传成功后生成 `fileUrl`，并将文件保存到本地上传目录 | 网关 `/uploads/**` 路由、Nginx/静态资源配置、对象存储或文件服务配置 |
-| 重置密码后的会话策略 | 当前只更新密码，不主动拉黑历史 Token | 产品安全策略、账号体系设计、是否存在其他会话管理服务 |
-| 幂等记录和临时文件清理 | `idempotent_record` 有 `expire_time`，上传临时文件按流程尽力删除 | 定时任务、运维脚本、数据库归档策略、异常中断后的临时文件清理方案 |
-| 短信过期记录维护 | `sms_record.status` 定义了过期状态，但当前流程主要依赖 Redis TTL 判断验证码过期 | 是否存在定时任务或运营审计需求 |
-| 上传文件生命周期 | 当前支持上传、幂等、去重，不包含删除、替换、引用计数 | 业务服务对文件的引用关系、文件清理策略、对象存储策略 |
+- 该流程不会拉黑历史 JWT；已签发且未过期的会话仍可继续使用。
+
+## 8. `GET /api/v1/users/profile`
+
+### 调用链
+
+```text
+UserController.getProfile -> UserService.getProfile -> UserMapper
+```
+
+### 执行步骤
+
+1. 从拦截器注入的 `userId` 查询未逻辑删除用户并检查账号状态。
+2. 组装资料响应，掩码手机号和身份证号。
+3. 加密身份证号以 `enc:v1:` 开头时，先用 AES-256-GCM 解密再脱敏。
+
+### 边界与可靠性
+
+- 用户不存在按未授权处理；禁用账号返回 `2011`。
+- 响应不包含密码、原始 JWT 或明文身份证号。
+
+## 9. `PATCH /api/v1/users/profile`
+
+### 调用链
+
+```text
+UserController.updateProfile -> UserService.updateProfile -> UserMapper optimistic update
+```
+
+### 执行步骤
+
+1. 校验 `version` 与可选资料字段；身份证号还会校验日期和校验位。
+2. 对身份证号使用随机 IV 的 AES-256-GCM 加密后入库。
+3. 以 `id + version + is_deleted=0` 条件更新，并将版本加一。
+4. 发生版本竞争时重新读取：请求实际提供的字段与当前值一致则视为幂等重试，否则返回冲突。
+
+### 边界与可靠性
+
+- 生产环境没有 32 字节身份证加密密钥时服务不能启动。
+- 同版本同内容不会重复写库；不同内容的陈旧版本返回 `2016`。
+
+## 10. `POST /api/v1/files/upload`
+
+### 调用链
+
+```text
+FileController.upload -> FileStorageService.upload
+  -> temporary file + SHA-256
+  -> IdempotentRecordMapper / FileUploadRecordMapper
+  -> permanent file move
+```
+
+### 执行步骤
+
+1. 校验受保护身份、`Idempotent-Key`、业务类型、大小、扩展名和可选 Content-Type。
+2. 写入临时目录并计算 SHA-256，锁定用户级上传幂等记录。
+3. 同键同文件回放原结果；同键不同文件或槽位返回冲突；处理中返回处理中冲突。
+4. 按 `(userId, bizType, hash, extension)` 复用已有上传记录，或移动文件至哈希目录并写入新记录。
+5. 将幂等记录完成并返回文件 URL。
+
+### 边界与可靠性
+
+- 文件系统移动与数据库事务不能组成原子提交；流程会尽力删除临时文件。
+- 文件只支持上传、幂等和去重，未实现删除、替换、引用计数和过期幂等记录清理。
+
+## 11. 源码对应表
+
+| 职责 | 源码 |
+| --- | --- |
+| 用户 HTTP 入口 | `controller/UserController.java` |
+| 短信 HTTP 入口 | `controller/SmsController.java` |
+| 上传 HTTP 入口 | `controller/FileController.java` |
+| 用户、认证和资料 | `service/UserService.java` 及实现类 |
+| 短信发送、校验和 Worker | `service/SmsService.java`、`SmsOutboxWorker.java` |
+| 上传和幂等 | `service/FileStorageService.java` 及 Mapper |
+| 通用响应与异常 | `nursing-common/.../result/`、`exception/GlobalExceptionHandler.java` |

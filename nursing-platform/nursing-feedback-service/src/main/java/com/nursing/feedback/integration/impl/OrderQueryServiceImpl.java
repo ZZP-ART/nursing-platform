@@ -2,7 +2,7 @@ package com.nursing.feedback.integration.impl;
 
 import com.nursing.common.constant.ApiCode;
 import com.nursing.common.dto.OrderDTO;
-import com.nursing.common.feign.OrderFeignClient;
+import com.nursing.feedback.feign.OrderFeignClient;
 import com.nursing.common.result.Result;
 import com.nursing.feedback.integration.OrderQueryService;
 import org.slf4j.Logger;

@@ -6,6 +6,7 @@
         <id column="id" property="id"/>
         <result column="order_no" property="orderNo"/>
         <result column="user_id" property="userId"/>
+        <result column="merchant_id" property="merchantId"/>
         <result column="source" property="source"/>
         <result column="version" property="version"/>
         <result column="service_item_id" property="serviceItemId"/>
@@ -34,7 +35,7 @@
     </resultMap>
 
     <sql id="BaseColumns">
-        id, order_no, user_id, source, version, service_item_id, service_spec_id,
+        id, order_no, user_id, merchant_id, source, version, service_item_id, service_spec_id,
         service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
         receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
         total_amount, status, slot_occupied, remark, cancel_reason, is_deleted, create_time, update_time
@@ -42,12 +43,12 @@
 
     <insert id="insert" parameterType="com.nursing.order.entity.OrderHeader">
         INSERT INTO order_header (
-            id, order_no, user_id, source, version, service_item_id, service_spec_id,
+            id, order_no, user_id, merchant_id, source, version, service_item_id, service_spec_id,
             service_item_name, category_name, spec_name, spec_price, spec_duration, quantity, catalog_snapshot_version, address_id,
             receiver_name, receiver_phone, address_detail, service_date, service_time_slot,
             total_amount, status, slot_occupied, remark, cancel_reason, is_deleted
         ) VALUES (
-            #{id}, #{orderNo}, #{userId}, #{source}, #{version}, #{serviceItemId}, #{serviceSpecId},
+            #{id}, #{orderNo}, #{userId}, #{merchantId}, #{source}, #{version}, #{serviceItemId}, #{serviceSpecId},
             #{serviceItemName}, #{categoryName}, #{specName}, #{specPrice}, #{specDuration}, #{quantity}, #{catalogSnapshotVersion}, #{addressId},
             #{receiverName}, #{receiverPhone}, #{addressDetail}, #{serviceDate}, #{serviceTimeSlot},
             #{totalAmount}, #{status}, COALESCE(#{slotOccupied}, 1), #{remark}, #{cancelReason}, COALESCE(#{isDeleted}, 0)
@@ -76,6 +77,14 @@
         SELECT <include refid="BaseColumns"/> FROM order_header
         WHERE is_deleted = 0 AND id IN
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+
+    <select id="selectByMerchantId" resultMap="OrderHeaderMap">
+        SELECT <include refid="BaseColumns"/> FROM order_header
+        WHERE merchant_id = #{merchantId} AND is_deleted = 0
+        <if test="status != null">AND status = #{status}</if>
+        ORDER BY create_time DESC
+        LIMIT 200
     </select>
 
     <select id="selectByOrderNoForUpdate" resultMap="OrderHeaderMap">

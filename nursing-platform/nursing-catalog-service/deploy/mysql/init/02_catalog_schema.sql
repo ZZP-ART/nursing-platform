@@ -1,4 +1,6 @@
- CREATE DATABASE IF NOT EXISTS catalog_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+SET NAMES utf8mb4;
+
+CREATE DATABASE IF NOT EXISTS catalog_db DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
  
  USE catalog_db;
  
@@ -22,16 +24,21 @@ CREATE TABLE IF NOT EXISTS service_category (
  CREATE TABLE IF NOT EXISTS service_item (
      id              BIGINT NOT NULL COMMENT '服务项目ID(雪花算法)',
      category_id     BIGINT NOT NULL COMMENT '所属分类ID',
+     owner_user_id   BIGINT DEFAULT NULL COMMENT '商户成员用户ID，NULL表示平台目录',
      name            VARCHAR(128) NOT NULL COMMENT '服务名称',
      description     TEXT COMMENT '图文详情',
      cover_image     VARCHAR(256) COMMENT '封面图URL',
      status          TINYINT DEFAULT 1 COMMENT '0下架 1上架',
+     audit_status    VARCHAR(32) NOT NULL DEFAULT 'APPROVED' COMMENT 'DRAFT/APPROVED',
+     publish_status  VARCHAR(32) NOT NULL DEFAULT 'PUBLISHED' COMMENT 'OFFLINE/PUBLISHED',
+     version         INT NOT NULL DEFAULT 1 COMMENT '服务版本',
      sort_order      INT DEFAULT 0 COMMENT '排序',
      is_deleted      TINYINT DEFAULT 0 COMMENT '0未删 1已删',
      create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
      update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
      PRIMARY KEY (id),
      INDEX idx_item_category_visible_sort (category_id, status, is_deleted, sort_order, id),
+     INDEX idx_item_owner_update (owner_user_id, is_deleted, update_time, id),
      INDEX idx_item_visible_sort (status, is_deleted, sort_order, id)
  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='服务项目表';
  

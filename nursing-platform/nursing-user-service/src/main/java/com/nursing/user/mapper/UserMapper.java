@@ -25,4 +25,6 @@ public interface UserMapper {
 
     int updateLastLoginTime(@Param("id") Long id,
                             @Param("lastLoginTime") LocalDateTime lastLoginTime);
+
+    int incrementAuthorizationVersion(@Param("id") Long id);
 }

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.operations.repository.CaregiverProfileMapper">
+ <resultMap id="ProfileMap" type="com.nursing.operations.entity.CaregiverProfile">
+  <result property="caregiverId" column="caregiver_id"/><result property="userId" column="user_id"/>
+  <result property="realName" column="real_name"/><result property="serviceAreas" column="service_areas"/>
+  <result property="skills" column="skills"/><result property="auditStatus" column="audit_status"/>
+  <result property="maxDailyOrders" column="max_daily_orders"/><result property="rating" column="rating"/>
+  <result property="completedOrders" column="completed_orders"/><result property="status" column="status"/>
+ </resultMap>
+ <select id="selectByUserId" resultMap="ProfileMap">SELECT caregiver_id,user_id,real_name,service_areas,skills,audit_status,max_daily_orders,rating,completed_orders,status FROM caregiver_profile WHERE user_id=#{userId}</select>
+</mapper>

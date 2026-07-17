@@ -1,18 +1,12 @@
-server:
-  port: 8082
-
 spring:
   application:
     name: nursing-catalog-service
   profiles:
     default: dev
   config:
-    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
-  datasource:
-    url: ${NURSING_CATALOG_DB_URL}
-    username: ${NURSING_DB_USERNAME}
-    password: ${NURSING_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    import:
+      - nacos:${spring.application.name}.yaml?group=NURSING&refreshEnabled=false
+      - nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=false
   cloud:
     nacos:
       config:
@@ -25,9 +19,9 @@ spring:
         namespace: ${NURSING_NACOS_NAMESPACE:}
         group: NURSING
 
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.nursing.catalog.entity
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+server:
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
+      force-response: true

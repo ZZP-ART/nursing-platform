@@ -6,6 +6,7 @@ import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
+import org.springframework.data.redis.core.ReactiveValueOperations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
@@ -22,10 +23,12 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 class JwtAuthGlobalFilterTest {
     private static final String SECRET = "dev-jwt-secret-for-nursing-platform-32bytes";
     private ReactiveStringRedisTemplate redisTemplate;
+    private ReactiveValueOperations<String, String> valueOperations;
     private JwtAuthGlobalFilter filter;
 
     @BeforeEach
@@ -34,6 +37,9 @@ class JwtAuthGlobalFilterTest {
         properties.setSecret(SECRET);
         properties.setGatewayToken("gateway-token");
         redisTemplate = mock(ReactiveStringRedisTemplate.class);
+        valueOperations = mock(ReactiveValueOperations.class);
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get(anyString())).thenReturn(Mono.just("1"));
         filter = new JwtAuthGlobalFilter(properties, redisTemplate);
     }
 

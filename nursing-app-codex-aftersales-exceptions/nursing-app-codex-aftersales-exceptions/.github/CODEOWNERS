@@ -1,0 +1,9 @@
+# 默认由项目负责人审核全部代码。
+* @velvetkr
+
+# 公共基础设施需要负责人参与审核。
+/src/utils/ @velvetkr
+/src/store/ @velvetkr
+/src/uni.scss @velvetkr
+/src/pages.json @velvetkr
+/package.json @velvetkr

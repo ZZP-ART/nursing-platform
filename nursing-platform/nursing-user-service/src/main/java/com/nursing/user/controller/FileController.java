@@ -4,7 +4,6 @@ import com.nursing.common.result.Result;
 import com.nursing.user.dto.response.FileUploadResponse;
 import com.nursing.user.service.FileStorageService;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -22,8 +21,8 @@ public class FileController {
     }
 
     @PostMapping("/upload")
-    public Result<FileUploadResponse> upload(@RequestAttribute("userId") Long userId,
-                                             @RequestHeader("Idempotent-Key") String idempotentKey,
+    public Result<FileUploadResponse> upload(@RequestHeader("X-User-Id") Long userId,
+                                             @RequestHeader("Idempotency-Key") String idempotentKey,
                                              @RequestParam("file") MultipartFile file,
                                              @RequestParam("bizType") String bizType) {
         Result<FileUploadResponse> result = Result.success(fileStorageService.upload(file, bizType, userId, idempotentKey));

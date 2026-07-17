@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS review (
     order_id        BIGINT NOT NULL,
     user_id         BIGINT NOT NULL,
     service_item_id BIGINT,
+    service_item_name VARCHAR(128) NULL,
+    spec_name       VARCHAR(64) NULL,
     rating          TINYINT NOT NULL,
     content         TEXT,
     status          TINYINT DEFAULT 1,
@@ -17,7 +19,8 @@ CREATE TABLE IF NOT EXISTS review (
     update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
     UNIQUE KEY uk_order_id (order_id),
-    INDEX idx_user_id (user_id)
+    INDEX idx_user_id (user_id),
+    INDEX idx_review_snapshot_missing (service_item_name, spec_name, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS review_image (

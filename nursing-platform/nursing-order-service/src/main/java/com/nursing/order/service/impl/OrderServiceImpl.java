@@ -4,7 +4,7 @@ import com.nursing.common.dto.ServiceItemDTO;
 import com.nursing.common.dto.ServiceSpecDTO;
 import com.nursing.common.dto.OrderDTO;
 import com.nursing.common.exception.BusinessException;
-import com.nursing.common.feign.CatalogServiceFeignClient;
+import com.nursing.order.feign.CatalogServiceFeignClient;
 import com.nursing.common.result.PageResult;
 import com.nursing.common.result.Result;
 import com.nursing.common.util.SnowflakeIdWorker;
@@ -35,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -66,6 +67,7 @@ public class OrderServiceImpl implements IOrderService {
     private final PaymentRecordMapper paymentRecordMapper;
     private final SnowflakeIdWorker snowflakeIdWorker;
     private final RefundService refundService;
+    private final Long defaultMerchantId;
     @Autowired(required = false)
     private TransactionTemplate transactionTemplate;
 
@@ -78,7 +80,7 @@ public class OrderServiceImpl implements IOrderService {
                             PaymentRecordMapper paymentRecordMapper,
                             SnowflakeIdWorker snowflakeIdWorker) {
         this(idempotentService, catalogServiceFeignClient, userAddressMapper, orderHeaderMapper, orderOperationLogMapper,
-                orderSequenceMapper, paymentRecordMapper, snowflakeIdWorker, null);
+                orderSequenceMapper, paymentRecordMapper, snowflakeIdWorker, null, 20001L);
     }
 
     @Autowired
@@ -90,7 +92,8 @@ public class OrderServiceImpl implements IOrderService {
                             OrderSequenceMapper orderSequenceMapper,
                             PaymentRecordMapper paymentRecordMapper,
                             SnowflakeIdWorker snowflakeIdWorker,
-                            RefundService refundService) {
+                            RefundService refundService,
+                            @Value("${nursing.order.default-merchant-id}") Long defaultMerchantId) {
         this.idempotentService = idempotentService;
         this.catalogServiceFeignClient = catalogServiceFeignClient;
         this.userAddressMapper = userAddressMapper;
@@ -100,6 +103,10 @@ public class OrderServiceImpl implements IOrderService {
         this.paymentRecordMapper = paymentRecordMapper;
         this.snowflakeIdWorker = snowflakeIdWorker;
         this.refundService = refundService;
+        if (defaultMerchantId == null || defaultMerchantId <= 0) {
+            throw new IllegalArgumentException("nursing.order.default-merchant-id must be positive");
+        }
+        this.defaultMerchantId = defaultMerchantId;
     }
 
     @Override
@@ -186,16 +193,7 @@ public class OrderServiceImpl implements IOrderService {
         if (order == null) {
             throw new BusinessException(ORDER_NOT_FOUND, "订单不存在");
         }
-        OrderDTO dto = new OrderDTO();
-        dto.setOrderId(order.getId());
-        dto.setOrderNo(order.getOrderNo());
-        dto.setUserId(order.getUserId());
-        dto.setStatus(order.getStatus());
-        dto.setServiceItemId(order.getServiceItemId());
-        dto.setServiceItemName(order.getServiceItemName());
-        dto.setSpecName(order.getSpecName());
-        dto.setTotalAmount(order.getTotalAmount());
-        return dto;
+        return toOrderDTO(order);
     }
 
     @Override
@@ -204,6 +202,14 @@ public class OrderServiceImpl implements IOrderService {
             throw new BusinessException(com.nursing.common.constant.ApiCode.PARAM_ERROR, "orderIds must contain 1 to 100 entries");
         }
         return orderHeaderMapper.selectByIds(orderIds).stream().map(this::toOrderDTO).toList();
+    }
+
+    @Override
+    public java.util.List<OrderDTO> getInternalMerchantOrders(Long merchantId, Integer status) {
+        if (merchantId == null || merchantId <= 0) {
+            throw new BusinessException(com.nursing.common.constant.ApiCode.PARAM_ERROR, "merchantId must be positive");
+        }
+        return orderHeaderMapper.selectByMerchantId(merchantId, status).stream().map(this::toOrderDTO).toList();
     }
 
     @Override
@@ -253,10 +259,10 @@ public class OrderServiceImpl implements IOrderService {
         if (Integer.valueOf(2).equals(order.getStatus())) {
             return toOrderDTO(order);
         }
-        if (!Integer.valueOf(1).equals(order.getStatus())) {
+        if (!Integer.valueOf(9).equals(order.getStatus())) {
             throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可完成");
         }
-        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), 1, 2, order.getVersion(), null);
+        int updated = orderHeaderMapper.updateStatusByIdVersion(order.getId(), 9, 2, order.getVersion(), null);
         if (updated == 0) {
             throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可完成");
         }
@@ -267,11 +273,30 @@ public class OrderServiceImpl implements IOrderService {
         log.setUserId(userId);
         log.setOperator("USER");
         log.setAction("complete");
-        log.setFromStatus(1);
+        log.setFromStatus(9);
         log.setToStatus(2);
         log.setRemark("服务完成，可提交评价");
         orderOperationLogMapper.insert(log);
         order.setStatus(2);
+        return toOrderDTO(order);
+    }
+
+    @Override
+    @Transactional
+    public OrderDTO transitionInternalOrder(Long orderId, Integer fromStatus, Integer toStatus, String reason) {
+        OrderHeader order = orderHeaderMapper.selectById(orderId);
+        if (order == null || !java.util.Objects.equals(order.getStatus(), fromStatus)) {
+            throw new BusinessException(ORDER_PAY_INVALID, "当前状态不可转换");
+        }
+        if (orderHeaderMapper.updateStatusByIdVersion(orderId, fromStatus, toStatus, order.getVersion(), reason) != 1) {
+            throw new BusinessException(ORDER_PAY_INVALID, "订单状态已变更");
+        }
+        OrderOperationLog log = new OrderOperationLog();
+        log.setId(snowflakeIdWorker.nextId()); log.setOrderId(order.getId()); log.setOrderNo(order.getOrderNo());
+        log.setUserId(order.getUserId()); log.setOperator("SYSTEM"); log.setAction("internal_transition");
+        log.setFromStatus(fromStatus); log.setToStatus(toStatus); log.setRemark(reason);
+        orderOperationLogMapper.insert(log);
+        order.setStatus(toStatus);
         return toOrderDTO(order);
     }
 
@@ -364,6 +389,7 @@ public class OrderServiceImpl implements IOrderService {
         order.setId(snowflakeIdWorker.nextId());
         order.setOrderNo(nextOrderNo());
         order.setUserId(userId);
+        order.setMerchantId(defaultMerchantId);
         order.setSource(0);
         order.setVersion(0);
         order.setServiceItemId(request.getServiceItemId());
@@ -449,11 +475,20 @@ public class OrderServiceImpl implements IOrderService {
         dto.setOrderId(order.getId());
         dto.setOrderNo(order.getOrderNo());
         dto.setUserId(order.getUserId());
+        dto.setMerchantId(order.getMerchantId());
         dto.setStatus(order.getStatus());
         dto.setServiceItemId(order.getServiceItemId());
+        dto.setServiceSpecId(order.getServiceSpecId());
         dto.setServiceItemName(order.getServiceItemName());
         dto.setSpecName(order.getSpecName());
         dto.setTotalAmount(order.getTotalAmount());
+        dto.setReceiverName(order.getReceiverName());
+        dto.setReceiverPhone(order.getReceiverPhone());
+        dto.setAddressDetail(order.getAddressDetail());
+        dto.setRemark(order.getRemark());
+        dto.setServiceDate(order.getServiceDate());
+        dto.setServiceTimeSlot(order.getServiceTimeSlot());
+        dto.setCreateTime(order.getCreateTime());
         return dto;
     }
 

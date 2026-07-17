@@ -11,7 +11,7 @@ import java.util.List;
 public interface SmsOutboxEventMapper {
     int insert(SmsOutboxEvent event);
 
-    List<SmsOutboxEvent> selectPending(@Param("limit") int limit);
+    List<SmsOutboxEvent> selectPending(@Param("limit") int limit, @Param("now") LocalDateTime now);
 
     List<SmsOutboxEvent> selectStaleProcessing(@Param("before") LocalDateTime before,
                                                 @Param("limit") int limit);

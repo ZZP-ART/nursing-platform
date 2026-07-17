@@ -19,4 +19,12 @@ public interface ComplaintMapper {
                                        @Param("size") int size);
 
     long countByUserId(@Param("userId") Long userId);
+
+    List<Complaint> selectAdminPage(@Param("status") Integer status,
+                                    @Param("offset") int offset,
+                                    @Param("size") int size);
+
+    long countAdmin(@Param("status") Integer status);
+
+    int updateStatus(@Param("id") Long id, @Param("status") int status);
 }

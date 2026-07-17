@@ -8,6 +8,7 @@ public class OrderHeader {
     private Long id;
     private String orderNo;
     private Long userId;
+    private Long merchantId;
     private Integer source;
     private Integer version;
     private Long serviceItemId;
@@ -40,6 +41,8 @@ public class OrderHeader {
     public void setOrderNo(String orderNo) { this.orderNo = orderNo; }
     public Long getUserId() { return userId; }
     public void setUserId(Long userId) { this.userId = userId; }
+    public Long getMerchantId() { return merchantId; }
+    public void setMerchantId(Long merchantId) { this.merchantId = merchantId; }
     public Integer getSource() { return source; }
     public void setSource(Integer source) { this.source = source; }
     public Integer getVersion() { return version; }

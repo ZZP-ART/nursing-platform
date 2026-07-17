@@ -37,10 +37,10 @@ public class ComplaintController {
 
     @PostMapping
     public Result<ComplaintSubmitResponse> submitComplaint(@Valid @RequestBody SubmitComplaintRequest request,
-                                                           @RequestHeader(value = "Idempotent-Key", required = false) String idempotentKey,
+                                                           @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                            HttpServletRequest servletRequest) {
         Long userId = currentUserId(servletRequest);
-        ComplaintSubmitResponse response = complaintService.submitComplaint(request, userId, idempotentKey);
+        ComplaintSubmitResponse response = complaintService.submitComplaint(request, userId, idempotencyKey);
         Result<ComplaintSubmitResponse> result = Result.success(response);
         result.setMessage("投诉提交成功，我们将在24小时内处理");
         return result;

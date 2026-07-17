@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.operations.repository.ServiceAssignmentMapper">
+ <resultMap id="AssignmentMap" type="com.nursing.operations.entity.ServiceAssignment"><id property="id" column="id"/><result property="orderId" column="order_id"/><result property="activeOrderId" column="active_order_id"/><result property="merchantId" column="merchant_id"/><result property="caregiverUserId" column="caregiver_user_id"/><result property="status" column="status"/><result property="remark" column="remark"/><result property="createTime" column="create_time"/><result property="acceptedTime" column="accepted_time"/><result property="rejectedTime" column="rejected_time"/></resultMap>
+ <insert id="insert">INSERT INTO service_assignment(id,order_id,active_order_id,merchant_id,caregiver_user_id,status,remark) VALUES(#{id},#{orderId},#{activeOrderId},#{merchantId},#{caregiverUserId},#{status},#{remark})</insert>
+ <select id="selectById" resultMap="AssignmentMap">SELECT * FROM service_assignment WHERE id=#{id}</select>
+ <select id="selectActiveByOrderId" resultMap="AssignmentMap">SELECT * FROM service_assignment WHERE active_order_id=#{orderId} LIMIT 1</select>
+ <select id="selectActiveByOrderIdAndMerchantId" resultMap="AssignmentMap">SELECT * FROM service_assignment WHERE active_order_id=#{orderId} AND merchant_id=#{merchantId} LIMIT 1</select>
+ <update id="accept">UPDATE service_assignment SET status=1,accepted_time=NOW() WHERE id=#{id} AND caregiver_user_id=#{caregiverUserId} AND status=0</update>
+ <update id="reject">UPDATE service_assignment SET status=2,active_order_id=NULL,rejected_time=NOW(),remark=#{remark} WHERE id=#{id} AND caregiver_user_id=#{caregiverUserId} AND status=0</update>
+ <select id="countActions" resultType="int">SELECT COUNT(1) FROM service_action WHERE assignment_id=#{assignmentId}</select>
+ <insert id="insertAction">INSERT INTO service_action(id,assignment_id,action,operator_user_id,remark) VALUES(#{id},#{assignmentId},#{action},#{operatorUserId},#{remark})</insert>
+ <select id="hasAction" resultType="boolean">SELECT EXISTS(SELECT 1 FROM service_action WHERE assignment_id=#{assignmentId} AND action=#{action})</select>
+ <select id="selectActionsByAssignmentId" resultType="com.nursing.operations.entity.ServiceAction">SELECT action,remark,create_time FROM service_action WHERE assignment_id=#{assignmentId} ORDER BY create_time ASC</select>
+ <select id="selectByMerchantId" resultMap="AssignmentMap">SELECT * FROM service_assignment WHERE merchant_id=#{merchantId} ORDER BY create_time DESC LIMIT 200</select>
+ <select id="selectByCaregiverUserId" resultMap="AssignmentMap">SELECT * FROM service_assignment WHERE caregiver_user_id=#{caregiverUserId} ORDER BY create_time DESC LIMIT 200</select>
+</mapper>

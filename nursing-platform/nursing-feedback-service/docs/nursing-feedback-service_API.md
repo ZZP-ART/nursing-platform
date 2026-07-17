@@ -1,6 +1,6 @@
 # feedback-service 接口说明
 
-> 基于当前 `nursing-feedback-service` 实现整理，覆盖评价、投诉与投诉进度查询接口。
+> 基于当前 `nursing-feedback-service` 实现整理，并采用 catalog-service 的“服务约定、共用对象、逐接口请求与响应”结构，覆盖评价、投诉与投诉进度查询接口。
 
 ## 1. 服务约定
 
@@ -21,7 +21,7 @@
 
 可信网关令牌不匹配时返回 HTTP `403`、`code=1004`；用户身份缺失或不能转换为数字时返回 `code=1002`。所有接口实际都校验登录身份，包括公开评价列表接口。
 
-### 1.1 统一分页响应
+### 1.1 共用对象
 
 评价与投诉列表的 `data` 格式：
 
@@ -30,6 +30,11 @@
 ```
 
 服务会将 `page` 小于 1 修正为 1，并将 `size` 限制在 1-100；不会因超出区间返回参数错误。
+
+| 对象 | 字段 | 说明 |
+| --- | --- | --- |
+| `PageResult<T>` | `list`、`total`、`page`、`size` | 评价和投诉列表统一分页对象 |
+| `ComplaintStatus` | `0-3` | 依次为 `pending`、`processing`、`resolved`、`closed` |
 
 ## 2. 提交评价
 

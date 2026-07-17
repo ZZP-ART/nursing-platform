@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 import java.util.UUID;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -33,6 +34,7 @@ public class TokenService {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String USER_TOKEN_KEY_PREFIX = "user:token:";
     private static final String TOKEN_BLACKLIST_KEY_PREFIX = "jwt:blacklist:";
+    private static final String AUTH_VERSION_KEY_PREFIX = "authz:version:";
 
     private final JwtProperties jwtProperties;
     private final RedisTemplate<String, String> redisTemplate;
@@ -50,7 +52,7 @@ public class TokenService {
         this.snowflakeIdWorker = snowflakeIdWorker;
     }
 
-    public TokenIssue generateToken(User user) {
+    public TokenIssue generateToken(User user, List<String> roles) {
         Instant now = Instant.now();
         Instant expireAt = now.plusSeconds(jwtProperties.getExpireSeconds());
         String tokenId = UUID.randomUUID().toString();
@@ -60,6 +62,8 @@ public class TokenService {
                 .subject(String.valueOf(user.getId()))
                 .claim("userId", user.getId())
                 .claim("phone", user.getPhone())
+                .claim("roles", roles == null ? List.of() : roles)
+                .claim("authorizationVersion", user.getAuthorizationVersion() == null ? 1 : user.getAuthorizationVersion())
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expireAt))
                 .signWith(signingKey())
@@ -67,11 +71,18 @@ public class TokenService {
 
         LocalDateTime expireTime = LocalDateTime.ofInstant(expireAt, zoneId);
         saveTokenRecord(user.getId(), tokenId, token, expireTime);
+        redisTemplate.opsForValue().set(AUTH_VERSION_KEY_PREFIX + user.getId(),
+                String.valueOf(user.getAuthorizationVersion() == null ? 1 : user.getAuthorizationVersion()),
+                Math.max(1L, jwtProperties.getExpireSeconds()), TimeUnit.SECONDS);
         return new TokenIssue(token, tokenId, expireTime);
     }
 
     public TokenPayload validateToken(String token) {
         return validateToken(token, true);
+    }
+
+    public TokenIssue generateToken(User user) {
+        return generateToken(user, List.of());
     }
 
     public TokenPayload validateTokenForLogout(String token) {
@@ -112,6 +123,12 @@ public class TokenService {
             // 登出不修改 JWT 本身，而是把 tokenId 拉黑到原过期时间。
             redisTemplate.opsForValue().set(blacklistKey(tokenId), "1", ttlSeconds, TimeUnit.SECONDS);
         }
+    }
+
+    public void cacheAuthorizationVersion(Long userId, Integer authorizationVersion) {
+        redisTemplate.opsForValue().set(AUTH_VERSION_KEY_PREFIX + userId,
+                String.valueOf(authorizationVersion == null ? 1 : authorizationVersion),
+                Math.max(1L, jwtProperties.getExpireSeconds()), TimeUnit.SECONDS);
     }
 
     public String resolveBearerToken(String authorizationHeader) {

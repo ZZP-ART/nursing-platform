@@ -1,0 +1,29 @@
+{
+  "name": "nursing-platform-admin",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --mode development",
+    "dev:api": "vite --mode api",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.7.9",
+    "element-plus": "^2.9.3",
+    "mockjs": "^1.1.0",
+    "pinia": "^2.3.1",
+    "vue": "^3.4.21",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.1",
+    "jsdom": "^26.0.0",
+    "sass": "^1.83.4",
+    "vite": "^5.4.14",
+    "vitest": "^1.6.1"
+  }
+}

@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: nursing-operations-service
+  profiles:
+    default: dev
+  config:
+    import:
+      - nacos:${spring.application.name}.yaml?group=NURSING&refreshEnabled=false
+      - nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=false
+  cloud:
+    nacos:
+      config:
+        server-addr: ${NURSING_NACOS_ADDR}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        username: ${NURSING_NACOS_USERNAME:}
+        password: ${NURSING_NACOS_PASSWORD:}
+      discovery:
+        server-addr: ${NURSING_NACOS_ADDR}
+        namespace: ${NURSING_NACOS_NAMESPACE:}
+        group: NURSING

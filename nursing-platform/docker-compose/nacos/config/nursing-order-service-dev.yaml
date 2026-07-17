@@ -1,0 +1,9 @@
+logging:
+  level:
+    com.nursing: INFO
+
+nursing:
+  payment:
+    mock: true
+  order:
+    default-merchant-id: ${NURSING_DEFAULT_MERCHANT_ID:20001}

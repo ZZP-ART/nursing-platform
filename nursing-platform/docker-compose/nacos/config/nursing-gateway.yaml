@@ -1,0 +1,52 @@
+server:
+  port: 8080
+
+spring:
+  main:
+    web-application-type: reactive
+  cloud:
+    gateway:
+      globalcors:
+        # Demo deployment: let the separately hosted frontend call every API route.
+        # Credentials remain disabled, so wildcard origins are valid and no browser
+        # cookies are exposed cross-origin.
+        add-to-simple-url-handler-mapping: true
+        cors-configurations:
+          '[/**]':
+            allowed-origins:
+              - "*"
+            allowed-methods:
+              - "*"
+            allowed-headers:
+              - "*"
+            max-age: 3600
+      routes:
+        - id: user-service
+          uri: lb://nursing-user-service
+          predicates:
+            - Path=/api/v1/users/**,/api/v1/files/**,/api/v1/auth/**,/api/v1/admin/login
+        - id: catalog-service
+          uri: lb://nursing-catalog-service
+          predicates:
+            - Path=/api/v1/categories/**,/api/v1/items/**,/api/v1/admin/catalog/**
+        - id: order-service
+          uri: lb://nursing-order-service
+          predicates:
+            - Path=/api/v1/orders/**,/api/v1/addresses/**
+        - id: feedback-service
+          uri: lb://nursing-feedback-service
+          predicates:
+            - Path=/api/v1/reviews/**,/api/v1/complaints/**,/api/v1/admin/feedback/**
+        - id: operations-service
+          uri: lb://nursing-operations-service
+          predicates:
+            - Path=/api/v1/caregiver/**,/api/v1/caregivers/**,/api/v1/merchants/**,/api/v1/admin/caregiver-applications/**
+  data:
+    redis:
+      host: ${NURSING_REDIS_HOST}
+      port: ${NURSING_REDIS_PORT}
+
+nursing:
+  jwt:
+    secret: ${NURSING_JWT_SECRET}
+    gateway-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}

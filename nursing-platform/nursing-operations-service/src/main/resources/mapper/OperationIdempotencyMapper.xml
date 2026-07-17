@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.operations.repository.OperationIdempotencyMapper">
+  <resultMap id="IdempotencyMap" type="com.nursing.operations.entity.OperationIdempotency">
+    <id property="id" column="id"/>
+    <result property="operation" column="operation"/>
+    <result property="actorUserId" column="actor_user_id"/>
+    <result property="idempotentKey" column="idempotent_key"/>
+    <result property="requestHash" column="request_hash"/>
+    <result property="assignmentId" column="assignment_id"/>
+  </resultMap>
+  <select id="select" resultMap="IdempotencyMap">
+    SELECT * FROM operation_idempotency
+    WHERE operation=#{operation} AND actor_user_id=#{actorUserId} AND idempotent_key=#{idempotentKey}
+  </select>
+  <insert id="insert">
+    INSERT INTO operation_idempotency(id,operation,actor_user_id,idempotent_key,request_hash)
+    VALUES(#{id},#{operation},#{actorUserId},#{idempotentKey},#{requestHash})
+  </insert>
+  <update id="complete">
+    UPDATE operation_idempotency SET assignment_id=#{assignmentId},completed_time=NOW()
+    WHERE id=#{id} AND assignment_id IS NULL
+  </update>
+</mapper>

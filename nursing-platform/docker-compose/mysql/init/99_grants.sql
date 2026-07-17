@@ -1,1 +1,0 @@
--- Runtime grants are applied idempotently by docker-compose/db-bootstrap/bootstrap.sh.

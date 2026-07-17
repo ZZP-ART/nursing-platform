@@ -64,7 +64,7 @@ public class OrderController {
     public Result<OrderCreateResponse> create(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
-            @RequestHeader(value = "Idempotent-Key", required = false) String idempotentKey,
+            @RequestHeader("Idempotency-Key") String idempotentKey,
             @Valid @RequestBody OrderCreateRequest request) {
         requireTrustedGateway(trustedToken);
         return Result.success(orderService.createOrder(requireUserId(userId), idempotentKey, request));
@@ -98,7 +98,7 @@ public class OrderController {
         return Result.success(orderService.cancelOrder(requireUserId(userId), id, request));
     }
 
-    @PostMapping("/{id}/complete")
+    @PostMapping({"/{id}/confirm", "/{id}/complete"})
     public Result<com.nursing.common.dto.OrderDTO> complete(
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
@@ -112,7 +112,7 @@ public class OrderController {
             @RequestHeader(value = "X-User-Id", required = false) Long userId,
             @RequestHeader(value = "X-Gateway-Token", required = false) String trustedToken,
             @PathVariable("id") @Positive(message = "order id must be positive") Long id,
-            @RequestHeader("Idempotent-Key") String idempotentKey,
+            @RequestHeader("Idempotency-Key") String idempotentKey,
             @Valid @RequestBody PayRequest request) {
         requireTrustedGateway(trustedToken);
         return Result.success(paymentService.initiatePayment(requireUserId(userId), id, request, idempotentKey));

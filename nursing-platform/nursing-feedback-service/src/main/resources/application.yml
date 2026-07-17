@@ -1,27 +1,12 @@
-server:
-  port: 8084
-
 spring:
   application:
     name: nursing-feedback-service
   profiles:
     default: dev
   config:
-    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
-  datasource:
-    url: ${NURSING_FEEDBACK_DB_URL}
-    username: ${NURSING_DB_USERNAME}
-    password: ${NURSING_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 3
-  flyway:
-    enabled: true
-    baseline-on-migrate: true
-    baseline-version: 1
-    user: ${NURSING_FEEDBACK_MIGRATION_DB_USERNAME:${NURSING_DB_USERNAME}}
-    password: ${NURSING_FEEDBACK_MIGRATION_DB_PASSWORD:${NURSING_DB_PASSWORD}}
+    import:
+      - nacos:${spring.application.name}.yaml?group=NURSING&refreshEnabled=false
+      - nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=false
   cloud:
     nacos:
       config:
@@ -33,34 +18,3 @@ spring:
         server-addr: ${NURSING_NACOS_ADDR}
         namespace: ${NURSING_NACOS_NAMESPACE:}
         group: NURSING
-    openfeign:
-      client:
-        config:
-          default:
-            connect-timeout: 5000
-            read-timeout: 5000
-  kafka:
-    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS}
-    consumer:
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-    group-id: feedback-group
-
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.nursing.feedback.entity
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-
-nursing:
-  snowflake:
-    worker-id: 4
-    datacenter-id: 1
-  gateway:
-    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}
-  internal:
-    token: ${NURSING_INTERNAL_TOKEN}
-  events:
-    order-paid:
-      topic: ${NURSING_ORDER_PAID_TOPIC:order_events}

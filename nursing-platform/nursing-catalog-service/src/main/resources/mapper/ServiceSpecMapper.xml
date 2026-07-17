@@ -14,6 +14,19 @@
         <result property="status" column="status"/>
     </resultMap>
 
+    <resultMap id="AdminSpecMap" type="com.nursing.catalog.entity.ServiceSpec">
+        <id property="id" column="id"/>
+        <result property="serviceItemId" column="service_item_id"/>
+        <result property="name" column="name"/>
+        <result property="price" column="price"/>
+        <result property="originalPrice" column="original_price"/>
+        <result property="duration" column="duration"/>
+        <result property="status" column="status"/>
+        <result property="isDeleted" column="is_deleted"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
     <select id="selectByItemId" resultMap="SpecMap">
         SELECT
             id AS spec_id,
@@ -48,4 +61,58 @@
           AND is_deleted = 0
         ORDER BY service_item_id ASC, id ASC
     </select>
+
+    <select id="selectAdminById" resultMap="AdminSpecMap">
+        SELECT id, service_item_id, name, price, original_price, duration, status,
+               is_deleted, create_time, update_time
+        FROM service_spec
+        WHERE id = #{id}
+          AND is_deleted = 0
+        LIMIT 1
+    </select>
+
+    <select id="selectAdminByItemId" resultMap="AdminSpecMap">
+        SELECT id, service_item_id, name, price, original_price, duration, status,
+               is_deleted, create_time, update_time
+        FROM service_spec
+        WHERE service_item_id = #{serviceItemId}
+          AND is_deleted = 0
+        ORDER BY id ASC
+    </select>
+
+    <insert id="insert" parameterType="com.nursing.catalog.entity.ServiceSpec">
+        INSERT INTO service_spec
+        (id, service_item_id, name, price, original_price, duration, status, is_deleted, create_time, update_time)
+        VALUES
+        (#{id}, #{serviceItemId}, #{name}, #{price}, #{originalPrice}, #{duration}, #{status}, #{isDeleted}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.nursing.catalog.entity.ServiceSpec">
+        UPDATE service_spec
+        SET service_item_id = #{serviceItemId},
+            name = #{name},
+            price = #{price},
+            original_price = #{originalPrice},
+            duration = #{duration},
+            status = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        UPDATE service_spec
+        SET status = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <update id="markDeletedByItemId">
+        UPDATE service_spec
+        SET is_deleted = 1,
+            update_time = NOW()
+        WHERE service_item_id = #{serviceItemId}
+          AND is_deleted = 0
+    </update>
 </mapper>

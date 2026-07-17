@@ -4,6 +4,7 @@ import com.nursing.common.constant.ApiCode;
 import com.nursing.common.util.SnowflakeIdWorker;
 import com.nursing.user.constant.UserErrorCode;
 import com.nursing.user.dto.request.LoginRequest;
+import com.nursing.user.dto.request.AdminLoginRequest;
 import com.nursing.user.dto.request.RegisterRequest;
 import com.nursing.user.dto.request.ResetPasswordRequest;
 import com.nursing.user.dto.request.UpdateUserProfileRequest;
@@ -13,8 +14,11 @@ import com.nursing.user.dto.response.UserInfoResponse;
 import com.nursing.user.entity.User;
 import com.nursing.user.exception.UserBusinessException;
 import com.nursing.user.mapper.UserMapper;
+import com.nursing.user.mapper.UserRoleMapper;
+import com.nursing.common.constant.UserRole;
 import com.nursing.user.security.IdCardCrypto;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,6 +27,8 @@ import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 public class UserService {
@@ -39,6 +45,24 @@ public class UserService {
     private final PasswordEncoder passwordEncoder;
     private final SnowflakeIdWorker snowflakeIdWorker;
     private final IdCardCrypto idCardCrypto;
+    private final UserRoleMapper userRoleMapper;
+
+    @Autowired
+    public UserService(UserMapper userMapper,
+                       SmsService smsService,
+                       TokenService tokenService,
+                       PasswordEncoder passwordEncoder,
+                       SnowflakeIdWorker snowflakeIdWorker,
+                       IdCardCrypto idCardCrypto,
+                       UserRoleMapper userRoleMapper) {
+        this.userMapper = userMapper;
+        this.smsService = smsService;
+        this.tokenService = tokenService;
+        this.passwordEncoder = passwordEncoder;
+        this.snowflakeIdWorker = snowflakeIdWorker;
+        this.idCardCrypto = idCardCrypto;
+        this.userRoleMapper = userRoleMapper;
+    }
 
     public UserService(UserMapper userMapper,
                        SmsService smsService,
@@ -46,12 +70,7 @@ public class UserService {
                        PasswordEncoder passwordEncoder,
                        SnowflakeIdWorker snowflakeIdWorker,
                        IdCardCrypto idCardCrypto) {
-        this.userMapper = userMapper;
-        this.smsService = smsService;
-        this.tokenService = tokenService;
-        this.passwordEncoder = passwordEncoder;
-        this.snowflakeIdWorker = snowflakeIdWorker;
-        this.idCardCrypto = idCardCrypto;
+        this(userMapper, smsService, tokenService, passwordEncoder, snowflakeIdWorker, idCardCrypto, null);
     }
 
     @Transactional
@@ -72,6 +91,7 @@ public class UserService {
         user.setStatus(0);
         user.setIsDeleted(0);
         user.setVersion(0);
+        user.setAuthorizationVersion(1);
         user.setCreateTime(now);
         user.setUpdateTime(now);
         try {
@@ -79,8 +99,9 @@ public class UserService {
         } catch (DuplicateKeyException e) {
             throw registerPhoneConflict();
         }
+        if (userRoleMapper != null) userRoleMapper.insertIgnore(user.getId(), UserRole.CUSTOMER.name());
 
-        return issueAuthResponse(user);
+        return issueAuthResponse(user, UserRole.CUSTOMER.name());
     }
 
     @Transactional
@@ -105,12 +126,35 @@ public class UserService {
         LocalDateTime now = LocalDateTime.now();
         userMapper.updateLastLoginTime(user.getId(), now);
         user.setLastLoginTime(now);
-        return issueAuthResponse(user);
+        return issueAuthResponse(user, request.getTargetRole());
+    }
+
+    public AuthResponse adminLogin(AdminLoginRequest request) {
+        User user = userMapper.selectByPhone(request.getUsername());
+        if (user == null || !passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new UserBusinessException(HttpStatus.UNAUTHORIZED, ApiCode.UNAUTHORIZED, "Invalid administrator credentials");
+        }
+        ensureEnabled(user);
+        return issueAuthResponse(user, UserRole.ADMIN.name());
+    }
+
+    public AuthResponse switchRole(Long userId, String targetRole) {
+        return issueAuthResponse(requireUser(userId), targetRole);
     }
 
     public void logout(String authorizationHeader) {
         String token = tokenService.resolveBearerToken(authorizationHeader);
         tokenService.invalidateToken(token);
+    }
+
+    @Transactional
+    public void grantRole(Long userId, String roleCode) {
+        User user = requireUser(userId);
+        UserRole.valueOf(roleCode);
+        userRoleMapper.insertIgnore(userId, roleCode);
+        userMapper.incrementAuthorizationVersion(userId);
+        User updated = requireUser(userId);
+        tokenService.cacheAuthorizationVersion(updated.getId(), updated.getAuthorizationVersion());
     }
 
     @Transactional
@@ -222,12 +266,21 @@ public class UserService {
         }
     }
 
-    private AuthResponse issueAuthResponse(User user) {
-        TokenService.TokenIssue tokenIssue = tokenService.generateToken(user);
+    private AuthResponse issueAuthResponse(User user, String requestedRole) {
+        List<String> roles = userRoleMapper == null ? List.of(UserRole.CUSTOMER.name()) : userRoleMapper.selectRoleCodes(user.getId());
+        if (roles == null || roles.isEmpty()) roles = List.of(UserRole.CUSTOMER.name());
+        String currentRole = StringUtils.hasText(requestedRole) ? requestedRole : roles.getFirst();
+        if (!roles.contains(currentRole)) {
+            throw new UserBusinessException(HttpStatus.FORBIDDEN, ApiCode.FORBIDDEN, "Role is not granted to this account");
+        }
+        TokenService.TokenIssue tokenIssue = tokenService.generateToken(user, List.of(currentRole));
         AuthResponse response = new AuthResponse();
         response.setToken(tokenIssue.getToken());
         response.setExpireTime(tokenIssue.getExpireTime());
         response.setUser(toAuthUserInfo(user));
+        response.setRoles(roles);
+        response.setCurrentRole(currentRole);
+        response.setPermissions(List.of());
         return response;
     }
 

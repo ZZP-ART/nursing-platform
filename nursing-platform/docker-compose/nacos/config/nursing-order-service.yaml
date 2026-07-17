@@ -1,0 +1,61 @@
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: ${NURSING_ORDER_DB_URL}
+    username: ${NURSING_DB_USERNAME}
+    password: ${NURSING_DB_PASSWORD}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  data:
+    redis:
+      host: ${NURSING_REDIS_HOST}
+      port: ${NURSING_REDIS_PORT}
+  kafka:
+    bootstrap-servers: ${NURSING_KAFKA_BOOTSTRAP_SERVERS}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      group-id: order-group
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.nursing.order.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+nursing:
+  snowflake:
+    worker-id: 3
+    datacenter-id: 1
+  payment:
+    alipay:
+      app-id: ${NURSING_ALIPAY_APP_ID:}
+      seller-id: ${NURSING_ALIPAY_SELLER_ID:}
+      public-key: ${NURSING_ALIPAY_PUBLIC_KEY:}
+      private-key: ${NURSING_ALIPAY_PRIVATE_KEY:}
+      notify-url: ${NURSING_ALIPAY_NOTIFY_URL:http://gateway:8080/api/v1/orders/pay/callback}
+  gateway:
+    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}
+  internal:
+    token: ${NURSING_INTERNAL_TOKEN}
+  order:
+    payment-timeout-minutes: ${NURSING_PAYMENT_TIMEOUT_MINUTES:30}
+    timeout-scan-fixed-delay: ${NURSING_ORDER_TIMEOUT_SCAN_DELAY:60000}
+  refund:
+    fixed-delay-ms: ${NURSING_REFUND_FIXED_DELAY_MS:5000}
+    max-retries: ${NURSING_REFUND_MAX_RETRIES:5}
+    retry-base-seconds: ${NURSING_REFUND_RETRY_BASE_SECONDS:30}
+  events:
+    order-paid:
+      topic: ${NURSING_ORDER_PAID_TOPIC:order_events}
+  kafka:
+    outbox-fixed-delay: 5000
+    outbox-batch-size: 50

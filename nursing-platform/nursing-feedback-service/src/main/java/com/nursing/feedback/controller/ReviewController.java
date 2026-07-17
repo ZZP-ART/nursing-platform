@@ -35,10 +35,10 @@ public class ReviewController {
 
     @PostMapping
     public Result<ReviewSubmitResponse> submitReview(@Valid @RequestBody SubmitReviewRequest request,
-                                                     @RequestHeader(value = "Idempotent-Key", required = false) String idempotentKey,
+                                                     @RequestHeader("Idempotency-Key") String idempotencyKey,
                                                      HttpServletRequest servletRequest) {
         Long userId = currentUserId(servletRequest);
-        ReviewSubmitResponse response = reviewService.submitReview(request, userId, idempotentKey);
+        ReviewSubmitResponse response = reviewService.submitReview(request, userId, idempotencyKey);
         Result<ReviewSubmitResponse> result = Result.success(response);
         result.setMessage("评价提交成功");
         return result;

@@ -63,7 +63,7 @@ class ComplaintServiceImplTest {
         Complaint complaint = existingComplaint(request, 40001L);
         when(complaintMapper.selectByUserAndIdempotentKey(10001L, "idem-key"))
                 .thenReturn(null, complaint);
-        when(orderQueryService.getOrder(20001L)).thenReturn(order(10001L, OrderStatus.WAITING_SERVICE.getValue()));
+        when(orderQueryService.getOrder(20001L)).thenReturn(order(10001L, OrderStatus.PENDING_DISPATCH.getValue()));
         when(snowflakeIdWorker.nextId()).thenReturn(40001L);
         when(complaintMapper.insert(any())).thenThrow(new DuplicateKeyException("duplicate"));
 
@@ -74,7 +74,7 @@ class ComplaintServiceImplTest {
     void sameKeyFromAnotherUserDoesNotReadTheFirstUsersComplaint() {
         SubmitComplaintRequest request = complaintRequest();
         when(complaintMapper.selectByUserAndIdempotentKey(20002L, "idem-key")).thenReturn(null);
-        when(orderQueryService.getOrder(20001L)).thenReturn(order(20002L, OrderStatus.WAITING_SERVICE.getValue()));
+        when(orderQueryService.getOrder(20001L)).thenReturn(order(20002L, OrderStatus.PENDING_DISPATCH.getValue()));
         when(snowflakeIdWorker.nextId()).thenReturn(40001L, 50001L);
 
         assertEquals(40001L, service().submitComplaint(request, 20002L, "idem-key").getComplaintId());

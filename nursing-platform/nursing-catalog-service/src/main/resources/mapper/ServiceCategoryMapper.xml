@@ -46,6 +46,15 @@
         LIMIT 1
     </select>
 
+    <select id="selectById" resultMap="ServiceCategoryMap">
+        SELECT c.id, c.parent_id, c.path, c.level, c.name, c.icon, c.sort_order,
+               c.status, c.is_deleted, c.create_time, c.update_time
+        FROM service_category c
+        WHERE c.id = #{id}
+          AND c.is_deleted = 0
+        LIMIT 1
+    </select>
+
     <select id="selectVisibleDescendantIds" resultType="long">
         SELECT c.id
         FROM service_category c
@@ -53,4 +62,30 @@
           AND <include refid="VisibleCategoryWhere"/>
         ORDER BY c.level ASC, c.sort_order ASC, c.id ASC
     </select>
+
+    <insert id="insert" parameterType="com.nursing.catalog.entity.ServiceCategory">
+        INSERT INTO service_category
+        (id, parent_id, path, level, name, icon, sort_order, status, is_deleted, create_time, update_time)
+        VALUES
+        (#{id}, #{parentId}, #{path}, #{level}, #{name}, #{icon}, #{sortOrder}, #{status}, #{isDeleted}, #{createTime}, #{updateTime})
+    </insert>
+
+    <update id="update" parameterType="com.nursing.catalog.entity.ServiceCategory">
+        UPDATE service_category
+        SET name = #{name},
+            icon = #{icon},
+            sort_order = #{sortOrder},
+            status = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
+
+    <update id="updateStatus">
+        UPDATE service_category
+        SET status = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
 </mapper>

@@ -21,9 +21,13 @@ public interface IOrderService {
 
     java.util.List<OrderDTO> getInternalOrders(java.util.List<Long> orderIds);
 
+    java.util.List<OrderDTO> getInternalMerchantOrders(Long merchantId, Integer status);
+
     CancelResponse cancelOrder(Long userId, Long orderId, CancelOrderRequest request);
 
     OrderDTO completeOrder(Long userId, Long orderId);
+
+    OrderDTO transitionInternalOrder(Long orderId, Integer fromStatus, Integer toStatus, String reason);
 
     int cancelExpiredPendingPaymentOrders(int timeoutMinutes);
 }

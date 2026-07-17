@@ -1,34 +1,13 @@
-server:
-  port: 8080
- 
 spring:
-  main:
-    web-application-type: reactive
   application:
     name: nursing-gateway
   profiles:
     default: dev
   config:
-    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
+    import:
+      - nacos:${spring.application.name}.yaml?group=NURSING&refreshEnabled=false
+      - nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=false
   cloud:
-    gateway:
-      routes:
-        - id: user-service
-          uri: lb://nursing-user-service
-          predicates:
-            - Path=/api/v1/users/**,/api/v1/files/**
-        - id: catalog-service
-          uri: lb://nursing-catalog-service
-          predicates:
-            - Path=/api/v1/categories/**,/api/v1/items/**
-        - id: order-service
-          uri: lb://nursing-order-service
-          predicates:
-            - Path=/api/v1/orders/**,/api/v1/addresses/**
-        - id: feedback-service
-          uri: lb://nursing-feedback-service
-          predicates:
-            - Path=/api/v1/reviews/**,/api/v1/complaints/**
     nacos:
       config:
         server-addr: ${NURSING_NACOS_ADDR}
@@ -39,12 +18,3 @@ spring:
         server-addr: ${NURSING_NACOS_ADDR}
         namespace: ${NURSING_NACOS_NAMESPACE:}
         group: NURSING
-  data:
-    redis:
-      host: ${NURSING_REDIS_HOST}
-      port: ${NURSING_REDIS_PORT}
-
-nursing:
-  jwt:
-    secret: ${NURSING_JWT_SECRET}
-    gateway-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nursing.operations.repository.MerchantMemberMapper">
+ <resultMap id="MemberMap" type="com.nursing.operations.entity.MerchantMember"><result property="merchantId" column="merchant_id"/><result property="userId" column="user_id"/><result property="position" column="position"/><result property="status" column="status"/></resultMap>
+ <select id="selectEnabledByUserId" resultMap="MemberMap">SELECT merchant_id,user_id,position,status FROM merchant_member WHERE user_id=#{userId} AND status=1 LIMIT 1</select>
+ <select id="existsActiveCaregiver" resultType="boolean">SELECT EXISTS(SELECT 1 FROM merchant_caregiver WHERE merchant_id=#{merchantId} AND caregiver_user_id=#{caregiverUserId} AND status=1)</select>
+ <select id="selectActiveCaregiverUserIds" resultType="long">SELECT caregiver_user_id FROM merchant_caregiver WHERE merchant_id=#{merchantId} AND status=1 ORDER BY caregiver_user_id</select>
+</mapper>

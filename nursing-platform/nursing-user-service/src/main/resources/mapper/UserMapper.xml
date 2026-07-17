@@ -17,22 +17,23 @@
         <result property="registerIp" column="register_ip"/>
         <result property="isDeleted" column="is_deleted"/>
         <result property="version" column="version"/>
+        <result property="authorizationVersion" column="authorization_version"/>
         <result property="createTime" column="create_time"/>
         <result property="updateTime" column="update_time"/>
     </resultMap>
 
     <sql id="BaseColumns">
         id, phone, password, nickname, avatar, gender, id_card, status,
-        last_login_time, register_ip, is_deleted, version, create_time, update_time
+        last_login_time, register_ip, is_deleted, version, authorization_version, create_time, update_time
     </sql>
 
     <insert id="insert" parameterType="com.nursing.user.entity.User">
         INSERT INTO `user` (
             id, phone, password, nickname, avatar, gender, id_card, status,
-            last_login_time, register_ip, is_deleted, version, create_time, update_time
+            last_login_time, register_ip, is_deleted, version, authorization_version, create_time, update_time
         ) VALUES (
             #{id}, #{phone}, #{password}, #{nickname}, #{avatar}, #{gender}, #{idCard}, #{status},
-            #{lastLoginTime}, #{registerIp}, #{isDeleted}, #{version}, #{createTime}, #{updateTime}
+            #{lastLoginTime}, #{registerIp}, #{isDeleted}, #{version}, #{authorizationVersion}, #{createTime}, #{updateTime}
         )
     </insert>
 
@@ -98,5 +99,12 @@
             update_time = #{lastLoginTime}
         WHERE id = #{id}
           AND is_deleted = 0
+    </update>
+
+    <update id="incrementAuthorizationVersion">
+        UPDATE `user`
+        SET authorization_version = authorization_version + 1,
+            update_time = NOW()
+        WHERE id = #{id} AND is_deleted = 0
     </update>
 </mapper>

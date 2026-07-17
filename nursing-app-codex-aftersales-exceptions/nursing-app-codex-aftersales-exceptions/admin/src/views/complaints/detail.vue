@@ -1,0 +1,14 @@
+<template>
+  <div v-loading="loading" class="review-detail-page"><div class="detail-nav"><el-button text @click="router.back()"><el-icon><ArrowLeft /></el-icon>返回列表</el-button><el-tag v-if="detail" :type="detail.status === 2 ? 'success' : 'danger'" round>{{ statusText(detail.status) }}</el-tag></div><template v-if="detail"><section class="detail-hero"><div class="hero-avatar complaint-avatar">诉</div><div class="hero-copy"><span>投诉 #{{ detail.id }}</span><h2>{{ detail.content }}</h2><p>订单 ID：{{ detail.orderId }}</p></div><div class="hero-meta"><span>投诉类型</span><strong>{{ detail.type }}</strong><span>提交时间</span><strong>{{ detail.createTime }}</strong></div></section><section class="detail-layout"><div class="detail-main"><article class="panel detail-panel"><div class="panel-head"><div><span>投诉材料</span><h3>顾客提交内容</h3></div></div><div class="statement-block customer"><strong>投诉说明</strong><p>{{ detail.content }}</p></div></article></div><aside class="detail-side"><article v-if="[0, 1].includes(detail.status)" class="action-panel"><strong>平台处理</strong><p>填写处理说明并将投诉标记为已解决或已关闭。</p><el-select v-model="form.decision" size="large"><el-option label="已解决" value="RESOLVED" /><el-option label="已关闭" value="CLOSED" /></el-select><el-input v-model="form.remark" type="textarea" :rows="4" placeholder="填写处理事实和说明" /><el-button type="primary" size="large" @click="submit">确认处理</el-button></article></aside></section></template></div>
+</template>
+<script setup>
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import { useComplaintStore } from '../../stores/complaint.js'
+const route = useRoute(); const router = useRouter(); const store = useComplaintStore(); const loading = ref(true); const detail = computed(() => store.currentComplaint); const form = reactive({ decision: 'RESOLVED', remark: '' }); onMounted(async () => { try { await store.fetchComplaintDetail(route.params.id) } finally { loading.value = false } }); function statusText(value) { return ({ 0: '待处理', 1: '处理中', 2: '已解决', 3: '已关闭' }[value] || value) } async function submit() { if (form.remark.trim().length < 10) return ElMessage.warning('处理说明至少填写10个字符'); await store.arbitrateComplaint(detail.value.id, { status: form.decision === 'CLOSED' ? 3 : 2, content: form.remark.trim() }); ElMessage.success('投诉处理已完成') }
+</script>
+<style scoped>
+.complaint-avatar{background:#e7833b}.statement-block{margin-top:18px;padding:18px;border-radius:15px}.statement-block strong{font-size:13px}.statement-block p{margin:8px 0 0;color:#68728a;font-size:12px;line-height:1.7}.statement-block.customer{background:#fff6ef}.statement-block.merchant{background:#eff5ff}.action-panel .el-select,.action-panel .el-input-number,.action-panel .el-textarea{width:100%;margin-top:12px}
+</style>

@@ -40,4 +40,32 @@
         WHERE user_id = #{userId}
           AND is_deleted = 0
     </select>
+
+    <select id="selectAdminPage" resultType="com.nursing.feedback.entity.Complaint">
+        SELECT id, order_id, user_id, type, content, images, status, idempotent_key, request_hash, is_deleted, create_time, update_time
+        FROM complaint
+        WHERE is_deleted = 0
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+        ORDER BY create_time DESC
+        LIMIT #{offset}, #{size}
+    </select>
+
+    <select id="countAdmin" resultType="long">
+        SELECT COUNT(1)
+        FROM complaint
+        WHERE is_deleted = 0
+        <if test="status != null">
+          AND status = #{status}
+        </if>
+    </select>
+
+    <update id="updateStatus">
+        UPDATE complaint
+        SET status = #{status},
+            update_time = NOW()
+        WHERE id = #{id}
+          AND is_deleted = 0
+    </update>
 </mapper>

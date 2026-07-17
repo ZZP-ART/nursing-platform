@@ -1,6 +1,6 @@
-# order-service 接口说明
+# nursing-order-service 接口说明
 
-> 基于当前 `nursing-order-service` 实现整理，覆盖业务 API、支付宝回调和受内部令牌保护的服务间接口。
+> 本文遵循 catalog-service 的接口文档结构，覆盖订单、地址、支付回调及内部订单查询接口。
 
 ## 1. 服务约定
 
@@ -9,184 +9,181 @@
 | 服务名 | `nursing-order-service` |
 | 默认端口 | `8083` |
 | 网关路由 | `/api/v1/orders/**`、`/api/v1/addresses/**` |
-| Content-Type | 除回调外为 `application/json` |
+| Content-Type | 业务接口为 `application/json`；支付回调为表单参数 |
 | 成功响应 | `{ "code": 0, "message": "success", "data": ... }` |
 
-除 `POST /api/v1/orders/pay/callback` 外，所有公开订单与地址接口均要求网关注入以下请求头：
+除支付回调外，公开接口均由网关注入 `X-Gateway-Token` 和正整数 `X-User-Id`。前端应通过网关调用，不应伪造这两个头。缺失用户身份为 `1002`，网关令牌不可信为 HTTP `403`、`1004`；Bean Validation 失败为 HTTP `400`、`1000`。
 
-| Header | 必填 | 说明 |
+### 1.1 共用对象
+
+| 对象 | 字段 | 说明 |
 | --- | --- | --- |
-| `X-Gateway-Token` | 是 | 必须等于服务端配置的可信网关令牌 |
-| `X-User-Id` | 是 | 正整数登录用户 ID |
+| `PageResult<T>` | `list`、`total`、`page`、`size` | 订单和反馈列表分页对象 |
+| `AddressRequest` | 收件人、电话、标签、省市区、详细地址、`isDefault` | 创建地址必填；更新建议完整提交 |
+| `OrderStatus` | `0-5` | 依次为待支付、待服务、已完成、已取消、退款中、已退款 |
 
-缺少或错误的用户 ID 返回 `code=1002`；可信网关令牌不匹配返回 HTTP `403`、`code=1004`。参数校验失败返回 HTTP `400`、`code=1000`；未处理异常返回 HTTP `500`、`code=1999`。
+## 2. 获取地址列表
 
-### 1.1 订单状态
+`GET /api/v1/addresses`
 
-| 值 | 状态 |
-| ---: | --- |
-| `0` | 待支付 |
-| `1` | 待服务 |
-| `2` | 已完成 |
-| `3` | 已取消 |
-| `4` | 退款中 |
-| `5` | 已退款 |
+### 请求参数
+无。
 
-### 1.2 分页响应
+### 成功响应 `data`
+`AddressResponse[]`，字段为 `addressId`、`receiverName`、`receiverPhone`、`tag`、`province`、`city`、`district`、`detailAddress`、`isDefault`。
 
-订单列表的 `data` 为 `PageResult<OrderListResponse>`：
+## 3. 创建地址
 
-```json
-{ "list": [], "total": 0, "page": 1, "size": 20 }
-```
+`POST /api/v1/addresses`
 
-## 2. 地址管理
-
-### `GET /api/v1/addresses`
-
-返回当前用户全部未逻辑删除地址。`data` 为地址数组，单项字段包括 `addressId`、`receiverName`、`receiverPhone`、`tag`、`province`、`city`、`district`、`detailAddress`、`isDefault`。
-
-### `POST /api/v1/addresses`
-
-创建地址，成功时 `data` 为 `{ "addressId": 123 }`。
-
-### `PATCH /api/v1/addresses/{id}`
-
-更新当前用户地址，成功时 `data=null`。路径 `id` 必须大于 `0`。虽然接口使用 `PATCH`，实现会把请求对象字段直接写入地址记录；调用方应提交完整地址信息，避免遗漏字段被写为 `null`。
-
-### `DELETE /api/v1/addresses/{id}`
-
-逻辑删除当前用户地址，成功时 `data=null`。
-
-### `PUT /api/v1/addresses/{id}/default`
-
-将指定地址设置为默认地址，成功时 `data=null`；同一用户原默认地址会被取消默认标记。
-
-创建时所有下列字段必填。更新时 Bean Validation 仅校验已传字段，但建议仍完整提交。
+### 请求体
 
 | 字段 | 类型 | 规则 |
 | --- | --- | --- |
-| `receiverName` | string | 2-16 个字符 |
-| `receiverPhone` | string | 中国大陆手机号：`^1\d{10}$` |
+| `receiverName` | string | 2-16 字符 |
+| `receiverPhone` | string | `^1\d{10}$` |
 | `tag` | string | `家`、`公司`、`学校`、`其他` |
-| `province` / `city` / `district` | string | 每项最多 32 个字符 |
-| `detailAddress` | string | 5-100 个字符 |
-| `isDefault` | integer | 可选，`0` 或 `1`；创建时省略默认为 `0` |
+| `province`、`city`、`district` | string | 每项最多 32 字符 |
+| `detailAddress` | string | 5-100 字符 |
+| `isDefault` | integer | 可选，`0` 或 `1` |
 
-地址不存在或不属于当前用户时返回业务码 `3013`。
+### 成功响应
+`{ "data": { "addressId": 123 } }`。
 
-## 3. 获取下单令牌
+## 4. 更新地址
 
-### `POST /api/v1/orders/prepay-token`
+`PATCH /api/v1/addresses/{id}`
 
-为当前用户创建一次性下单令牌：
+### 路径与请求参数
+`id` 必须大于 0；请求体使用第 3 节地址对象。实现为字段覆盖更新，尽管请求方法为 PATCH，调用方仍应完整提交业务字段。
 
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {
-    "prepayToken": "pt_...",
-    "expireTime": "2026-07-14T10:10:00"
-  }
-}
-```
+### 成功响应
+`data=null`。地址不存在或不属于当前用户时返回 `3013`。
 
-令牌有效期为十分钟。下单时必须将 `prepayToken` 原样传入 `Idempotent-Key`；令牌仅能由创建它的用户使用，且不能用于不同请求内容。
+## 5. 删除地址
 
-## 4. 创建订单
+`DELETE /api/v1/addresses/{id}`
 
-### `POST /api/v1/orders`
+### 路径参数
+`id` 必须大于 0。
 
-请求头：`Idempotent-Key` 必填，取第 3 节返回的下单令牌。
+### 成功响应
+`data=null`；删除为逻辑删除。地址不存在或无权操作返回 `3013`。
 
-| 字段 | 类型 | 必填 | 规则 |
-| --- | --- | --- | --- |
-| `serviceItemId` | number | 是 | 正整数 |
-| `serviceSpecId` | number | 是 | 正整数，且属于可用项目 |
-| `addressId` | number | 是 | 当前用户有效地址 |
-| `serviceDate` | string | 是 | 日期，必须晚于当天 |
-| `serviceTimeSlot` | string | 是 | `MORNING`、`AFTERNOON`、`EVENING` |
-| `remark` | string | 否 | 最多 200 个字符 |
+## 6. 设置默认地址
 
-成功响应：
+`PUT /api/v1/addresses/{id}/default`
 
-```json
-{ "code": 0, "message": "success", "data": { "orderId": 123, "orderNo": "202607141" } }
-```
+### 路径参数与响应
+`id` 必须大于 0；成功 `data=null`。同一用户的原默认地址会被取消默认状态。
 
-同一用户、项目、日期和时段只能创建一个占用时段的订单。常见业务码：`3001` 幂等令牌无效、过期或请求内容不一致；`3002` 时段已预约；`3003` 项目下架；`3004` 规格下架；`3006` 地址无效。
+## 7. 获取下单令牌
 
-## 5. 查询订单
+`POST /api/v1/orders/prepay-token`
 
-### `GET /api/v1/orders`
+### 成功响应 `data`
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `prepayToken` | string | 以 `pt_` 开头的下单幂等令牌 |
+| `expireTime` | string | 十分钟后过期时间 |
+
+下单时必须将该值原样传入 `Idempotent-Key`。
+
+## 8. 创建订单
+
+`POST /api/v1/orders`
+
+### 请求头
+`Idempotent-Key` 必填，必须是第 7 节获取且属于当前用户的未过期令牌。
+
+### 请求体
+
+| 字段 | 类型 | 规则 |
+| --- | --- | --- |
+| `serviceItemId` / `serviceSpecId` / `addressId` | number | 正整数 |
+| `serviceDate` | string | 必须晚于当天 |
+| `serviceTimeSlot` | string | `MORNING`、`AFTERNOON`、`EVENING` |
+| `remark` | string | 可选，最多 200 字符 |
+
+### 成功响应
+`{ "data": { "orderId": 123, "orderNo": "202607141" } }`。
+
+同一用户、服务项目、日期和时段只能有一个占用订单。令牌无效、时段冲突、项目/规格不可用或地址无效分别使用 `3001`、`3002`、`3003/3004`、`3006`。
+
+## 9. 查询我的订单
+
+`GET /api/v1/orders`
+
+### 请求参数
 
 | 参数 | 类型 | 默认值 | 规则 |
 | --- | --- | --- | --- |
 | `status` | integer | - | 可选，`0-5` |
-| `page` | integer | `1` | 最小为 `1` |
+| `page` | integer | `1` | 最小 1 |
 | `size` | integer | `20` | `1-50` |
 
-仅返回当前用户订单，按服务端 Mapper 的默认顺序分页。列表项包括订单号、项目/规格快照、金额、状态、预约时间、收件快照和创建时间。
+### 成功响应 `data`
+`PageResult<OrderListResponse>`；列表项包含 `orderId`、`orderNo`、项目/规格/价格快照、金额、状态、预约日期与时段、收件快照和 `createTime`。
 
-### `GET /api/v1/orders/{id}`
+## 10. 查询订单详情
 
-返回当前用户订单详情。`data` 包含列表字段，以及 `payStatus` 和 `operationLogs`。日志项为 `action`、`fromStatus`、`toStatus`、`remark`、`createTime`。
+`GET /api/v1/orders/{id}`
 
-订单不存在返回 `3007`；订单不属于当前用户返回 `3008`。
+### 路径参数
+`id` 必须大于 0。
 
-## 6. 取消与完成订单
+### 成功响应 `data`
+订单列表字段之外还包括 `payStatus` 与 `operationLogs`；日志项为 `action`、`fromStatus`、`toStatus`、`remark`、`createTime`。订单不存在返回 `3007`，无权访问返回 `3008`。
 
-### `POST /api/v1/orders/{id}/cancel`
+## 11. 取消订单
 
-请求体可省略；提供时仅支持：
+`POST /api/v1/orders/{id}/cancel`
 
-```json
-{ "cancelReason": "行程变更" }
-```
+### 请求体
+可省略；提供时仅包含最长 200 字符的 `cancelReason`。
 
-`cancelReason` 最多 200 个字符。待支付订单取消后变为 `3`，返回 `refundStatus=NO_REFUND`；已支付待服务订单变为 `4` 并创建退款任务，返回 `refundStatus=REFUNDING`。对已取消、退款中或已退款订单重复调用会返回当前状态；其他状态不可取消，业务码为 `3009`。
+### 成功响应 `data`
+`CancelResponse(orderId, status, refundStatus)`。待支付订单变为已取消且 `refundStatus=NO_REFUND`；待服务订单变为退款中且 `refundStatus=REFUNDING`。
 
-### `POST /api/v1/orders/{id}/complete`
+## 12. 完成订单
 
-仅当前用户的待服务订单可完成，状态从 `1` 变为 `2`。成功 `data` 为内部订单对象，含 `orderId`、`orderNo`、`userId`、`status`、`serviceItemId`、`serviceItemName`、`specName`、`totalAmount`。
+`POST /api/v1/orders/{id}/complete`
 
-## 7. 发起支付与支付回调
+仅待服务订单可完成。成功响应为内部订单对象：`orderId`、`orderNo`、`userId`、`status`、`serviceItemId`、`serviceItemName`、`specName`、`totalAmount`。
 
-### `POST /api/v1/orders/{id}/pay`
+## 13. 发起支付
 
-请求头 `Idempotent-Key` 必填，长度不超过 128。请求体：
+`POST /api/v1/orders/{id}/pay`
 
-```json
-{ "payChannel": "alipay" }
-```
+### 请求头与请求体
+`Idempotent-Key` 必填，最长 128。请求体为 `{ "payChannel": "alipay" }`，当前仅支持支付宝。
 
-同一用户同一幂等键只能用于相同订单和支付渠道；一个订单只能创建一个支付意图。成功响应字段为：
+### 成功响应 `data`
+`PayResponse` 含 `orderId`、`orderNo`、`payChannel`、`payAmount`、`payStatus`（`READY` 或 `SUCCESS`）、`mock`、`payParams`。同一订单只能有一个支付意图。
 
-| 字段 | 说明 |
-| --- | --- |
-| `orderId` / `orderNo` | 订单标识 |
-| `payChannel` | 当前仅 `alipay` |
-| `payAmount` | 支付金额 |
-| `payStatus` | `READY` 或 `SUCCESS` |
-| `mock` | 是否模拟支付 |
-| `payParams` | 非模拟支付时用于调起渠道的参数 |
+## 14. 支付回调
 
-模拟支付仅允许开发或测试 profile，调用即将订单支付成功。非模拟模式下，订单必须为待支付状态；无效状态返回 `3010`。
+`POST /api/v1/orders/pay/callback`
 
-### `POST /api/v1/orders/pay/callback`
+支付宝服务端以请求参数回调，不使用 `Result` 包装。服务验证 RSA2 签名、应用/卖家信息、金额和交易状态；成功或可安全重放时返回文本 `success`，冲突时返回 `failure`。
 
-支付宝服务端回调，不使用统一 `Result` 包装，响应文本为 `success` 或 `failure`。生产调用必须携带并通过 RSA2 验签的 `notify_id`、`trade_no`、`out_trade_no`、`total_amount`、`trade_status`、`app_id`、`sign`、`sign_type`（配置卖家 ID 时还要求 `seller_id`）。
+## 15. 查询一笔内部订单
 
-服务仅对 `TRADE_SUCCESS` 与 `TRADE_FINISHED` 执行入账，并校验订单金额、应用和卖家信息。重复且内容一致的回调可安全确认；冲突回调记录审计日志并返回 `failure`。
+`GET /internal/v1/orders/{id}`
 
-## 8. 内部订单接口
+### 请求参数
+请求头 `X-Internal-Token` 必填；路径 `id` 为订单 ID。
 
-仅服务间调用。请求头 `X-Internal-Token` 必须等于 `nursing.internal.token`，否则返回 HTTP `403`、`code=1004`。
+### 成功响应 `data`
+`OrderDTO`，字段为 `orderId`、`orderNo`、`userId`、`status`、`serviceItemId`、`serviceItemName`、`specName`、`totalAmount`。内部令牌不匹配返回 HTTP `403`、`1004`。
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| `GET` | `/internal/v1/orders/{id}` | 返回一笔订单的内部 DTO |
-| `POST` | `/internal/v1/orders/batch` | 请求体为 `Long[]`，查询多笔订单 |
+## 16. 批量查询内部订单
 
-批量接口限制 1-100 个 ID；不符合时返回 HTTP `400`、`code=1000`。
+`POST /internal/v1/orders/batch`
+
+### 请求头与请求体
+请求头 `X-Internal-Token` 必填；请求体为 `Long[]`，长度必须为 1-100。
+
+### 成功响应 `data`
+`OrderDTO[]`。空数组或超过 100 项返回 HTTP `400`、`1000`。

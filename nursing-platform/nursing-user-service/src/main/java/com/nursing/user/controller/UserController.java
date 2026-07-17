@@ -16,7 +16,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -62,12 +61,12 @@ public class UserController {
     }
 
     @GetMapping("/profile")
-    public Result<UserInfoResponse> getProfile(@RequestAttribute("userId") Long userId) {
+    public Result<UserInfoResponse> getProfile(@RequestHeader("X-User-Id") Long userId) {
         return Result.success(userService.getProfile(userId));
     }
 
     @PatchMapping("/profile")
-    public Result<ProfileUpdateResponse> updateProfile(@RequestAttribute("userId") Long userId,
+    public Result<ProfileUpdateResponse> updateProfile(@RequestHeader("X-User-Id") Long userId,
                                                        @RequestBody @Valid UpdateUserProfileRequest request) {
         Result<ProfileUpdateResponse> result = Result.success(userService.updateProfile(userId, request));
         result.setMessage("修改成功");

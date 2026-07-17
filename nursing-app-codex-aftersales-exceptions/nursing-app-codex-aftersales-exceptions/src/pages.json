@@ -1,0 +1,253 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "智慧护理"
+      }
+    },
+    {
+      "path": "pages/login/login",
+      "style": {
+        "navigationBarTitleText": "登录"
+      }
+    },
+    {
+      "path": "pages/register/register",
+      "style": {
+        "navigationBarTitleText": "注册"
+      }
+    },
+    {
+      "path": "pages/service/service",
+      "style": {
+        "navigationBarTitleText": "服务项目"
+      }
+    },
+    {
+      "path": "pages/service-detail/service-detail",
+      "style": {
+        "navigationBarTitleText": "服务详情"
+      }
+    },
+    {
+      "path": "pages/search/search",
+      "style": {
+        "navigationBarTitleText": "搜索"
+      }
+    },
+    {
+      "path": "pages/booking/booking",
+      "style": { "navigationBarTitleText": "确认预约" }
+    },
+    {
+      "path": "pages/address/address-list",
+      "style": { "navigationBarTitleText": "服务地址" }
+    },
+    {
+      "path": "pages/address/address-edit",
+      "style": { "navigationBarTitleText": "编辑地址" }
+    },
+    {
+      "path": "pages/payment-result/payment-result",
+      "style": { "navigationBarTitleText": "支付结果" }
+    },
+    {
+      "path": "pages/account/account",
+      "style": { "navigationBarTitleText": "我的" }
+    },
+    {
+      "path": "pages/role-switch/role-switch",
+      "style": { "navigationBarTitleText": "切换身份" }
+    },
+    {
+      "path": "pages/order/order-list",
+      "style": { "navigationBarTitleText": "我的订单" }
+    },
+    {
+      "path": "pages/order/order-detail",
+      "style": { "navigationBarTitleText": "订单详情" }
+    },
+    {
+      "path": "pages/order/cancel-order",
+      "style": { "navigationBarTitleText": "取消与退款" }
+    },
+    {
+      "path": "pages/review/review-submit",
+      "style": { "navigationBarTitleText": "评价服务" }
+    },
+    {
+      "path": "pages/complaint/complaint-submit",
+      "style": { "navigationBarTitleText": "提交投诉" }
+    },
+    {
+      "path": "pages/complaint/complaint-list",
+      "style": { "navigationBarTitleText": "投诉记录" }
+    },
+    {
+      "path": "pages/complaint/complaint-detail",
+      "style": { "navigationBarTitleText": "投诉进度" }
+    },
+    {
+      "path": "pages/notification/notification-list",
+      "style": { "navigationBarTitleText": "消息中心" }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "subpkg-caregiver",
+      "name": "caregiver",
+      "pages": [
+        {
+          "path": "apply/index",
+          "style": { "navigationBarTitleText": "护理人员认证" }
+        },
+        {
+          "path": "home/index",
+          "style": { "navigationBarTitleText": "护理工作台" }
+        },
+        {
+          "path": "tasks/index",
+          "style": { "navigationBarTitleText": "我的任务" }
+        },
+        {
+          "path": "task-detail/index",
+          "style": { "navigationBarTitleText": "任务详情" }
+        },
+        {
+          "path": "service-finish/index",
+          "style": { "navigationBarTitleText": "完成服务" }
+        },
+        {
+          "path": "schedule/index",
+          "style": { "navigationBarTitleText": "排班管理" }
+        },
+        {
+          "path": "earnings/index",
+          "style": { "navigationBarTitleText": "我的佣金" }
+        },
+        {
+          "path": "profile/index",
+          "style": { "navigationBarTitleText": "护理人员中心" }
+        }
+      ]
+    },
+    {
+      "root": "subpkg-merchant",
+      "name": "merchant",
+      "pages": [
+        {
+          "path": "apply/index",
+          "style": { "navigationBarTitleText": "商户入驻" }
+        },
+        {
+          "path": "home/index",
+          "style": { "navigationBarTitleText": "商户工作台" }
+        },
+        {
+          "path": "orders/index",
+          "style": { "navigationBarTitleText": "订单管理" }
+        },
+        {
+          "path": "order-detail/index",
+          "style": { "navigationBarTitleText": "商户订单详情" }
+        },
+        {
+          "path": "exceptions/index",
+          "style": { "navigationBarTitleText": "异常订单" }
+        },
+        {
+          "path": "exception-detail/index",
+          "style": { "navigationBarTitleText": "异常处理" }
+        },
+        {
+          "path": "complaints/index",
+          "style": { "navigationBarTitleText": "投诉协同" }
+        },
+        {
+          "path": "complaint-detail/index",
+          "style": { "navigationBarTitleText": "投诉处理" }
+        },
+        {
+          "path": "settlements/index",
+          "style": { "navigationBarTitleText": "经营结算" }
+        },
+        {
+          "path": "reports/index",
+          "style": { "navigationBarTitleText": "经营数据" }
+        },
+        {
+          "path": "dispatch/index",
+          "style": { "navigationBarTitleText": "选择护理人员" }
+        },
+        {
+          "path": "team/index",
+          "style": { "navigationBarTitleText": "团队管理" }
+        },
+        {
+          "path": "caregiver-detail/index",
+          "style": { "navigationBarTitleText": "护理人员详情" }
+        },
+        {
+          "path": "caregiver-invite/index",
+          "style": { "navigationBarTitleText": "邀请护理人员" }
+        },
+        {
+          "path": "member-invite/index",
+          "style": { "navigationBarTitleText": "邀请商户成员" }
+        },
+        {
+          "path": "services/index",
+          "style": { "navigationBarTitleText": "服务管理" }
+        },
+        {
+          "path": "service-edit/index",
+          "style": { "navigationBarTitleText": "编辑服务" }
+        },
+        {
+          "path": "service-detail/index",
+          "style": { "navigationBarTitleText": "服务详情" }
+        },
+        {
+          "path": "profile/index",
+          "style": { "navigationBarTitleText": "商户中心" }
+        }
+      ]
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "智慧护理",
+    "navigationBarBackgroundColor": "#4A90D9",
+    "backgroundColor": "#F5F6F8",
+    "backgroundColorTop": "#4A90D9",
+    "backgroundColorBottom": "#F5F6F8"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#4A90D9",
+    "backgroundColor": "#F9FBFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/service/service",
+        "text": "服务"
+      },
+      {
+        "pagePath": "pages/account/account",
+        "text": "我的"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {
+      "^u-(.*)": "uview-plus/components/u-$1/u-$1.vue",
+      "^up-(.*)": "uview-plus/components/u-$1/u-$1.vue"
+    }
+  }
+}

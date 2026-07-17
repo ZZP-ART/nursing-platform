@@ -15,11 +15,20 @@ CREATE TABLE IF NOT EXISTS user (
     register_ip     VARCHAR(45) COMMENT '注册IP',
     is_deleted      TINYINT DEFAULT 0 COMMENT '0未删 1已删',
     version         INT NOT NULL DEFAULT 0 COMMENT '资料乐观锁版本号',
+    authorization_version INT NOT NULL DEFAULT 1 COMMENT 'JWT授权版本',
     create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     update_time     DATETIME DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     UNIQUE KEY uk_phone (phone)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='用户表';
+
+CREATE TABLE IF NOT EXISTS user_role (
+    user_id         BIGINT NOT NULL COMMENT '用户ID',
+    role_code       VARCHAR(32) NOT NULL COMMENT 'CUSTOMER/CAREGIVER/ADMIN',
+    create_time     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, role_code),
+    INDEX idx_role_user (role_code, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='固定用户角色表';
 
 CREATE TABLE IF NOT EXISTS user_token (
     id              BIGINT NOT NULL COMMENT '主键(雪花算法)',

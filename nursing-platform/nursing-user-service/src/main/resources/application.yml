@@ -1,22 +1,12 @@
-server:
-  port: 8081
-
 spring:
   application:
     name: nursing-user-service
   profiles:
     default: dev
   config:
-    import: ${NURSING_NACOS_CONFIG_PREFIX:}nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=true
-  datasource:
-    url: ${NURSING_USER_DB_URL}
-    username: ${NURSING_DB_USERNAME}
-    password: ${NURSING_DB_PASSWORD}
-    driver-class-name: com.mysql.cj.jdbc.Driver
-  data:
-    redis:
-      host: ${NURSING_REDIS_HOST}
-      port: ${NURSING_REDIS_PORT}
+    import:
+      - nacos:${spring.application.name}.yaml?group=NURSING&refreshEnabled=false
+      - nacos:${spring.application.name}-${spring.profiles.active:dev}.yaml?group=NURSING&refreshEnabled=false
   cloud:
     nacos:
       config:
@@ -28,23 +18,3 @@ spring:
         server-addr: ${NURSING_NACOS_ADDR}
         namespace: ${NURSING_NACOS_NAMESPACE:}
         group: NURSING
-
-mybatis:
-  mapper-locations: classpath:mapper/*.xml
-  type-aliases-package: com.nursing.user.entity
-  configuration:
-    map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
-
-nursing:
-  auth:
-    allow-local-token-validation: ${NURSING_ALLOW_LOCAL_TOKEN_VALIDATION:false}
-  gateway:
-    trusted-token: ${NURSING_GATEWAY_TRUSTED_TOKEN}
-  jwt:
-    secret: ${NURSING_JWT_SECRET}
-  security:
-    id-card-key: ${NURSING_ID_CARD_ENCRYPTION_KEY}
-  sms:
-    mock:
-      code: ${NURSING_SMS_MOCK_CODE:123456}

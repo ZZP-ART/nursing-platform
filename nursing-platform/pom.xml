@@ -25,7 +25,8 @@
          <module>nursing-user-service</module>
          <module>nursing-catalog-service</module>
          <module>nursing-order-service</module>
-         <module>nursing-feedback-service</module>
+        <module>nursing-feedback-service</module>
+        <module>nursing-operations-service</module>
      </modules>
  
      <properties>
@@ -40,7 +41,6 @@
         <openfeign.version>4.3.0</openfeign.version>
 
         <jjwt.version>0.12.6</jjwt.version>
-         <hutool.version>5.8.34</hutool.version>
      </properties>
  
      <dependencyManagement>
@@ -96,11 +96,6 @@
                  <artifactId>jjwt-jackson</artifactId>
                  <version>${jjwt.version}</version>
                  <scope>runtime</scope>
-             </dependency>
-             <dependency>
-                 <groupId>cn.hutool</groupId>
-                 <artifactId>hutool-all</artifactId>
-                 <version>${hutool.version}</version>
              </dependency>
          </dependencies>
      </dependencyManagement>

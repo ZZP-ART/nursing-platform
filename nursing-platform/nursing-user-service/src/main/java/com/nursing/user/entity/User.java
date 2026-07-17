@@ -16,6 +16,7 @@ public class User {
     private String registerIp;
     private Integer isDeleted;
     private Integer version;
+    private Integer authorizationVersion;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;
 
@@ -114,6 +115,10 @@ public class User {
     public void setVersion(Integer version) {
         this.version = version;
     }
+
+    public Integer getAuthorizationVersion() { return authorizationVersion; }
+
+    public void setAuthorizationVersion(Integer authorizationVersion) { this.authorizationVersion = authorizationVersion; }
 
     public LocalDateTime getCreateTime() {
         return createTime;

@@ -66,7 +66,7 @@ class SmsOutboxWorkerTest {
         request.setSmsType("register");
         request.setRequestIp("127.0.0.1");
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of());
-        when(outboxMapper.selectPending(20)).thenReturn(List.of(event));
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of(event));
         when(outboxMapper.claim(eq(10L), anyString(), any(), any())).thenReturn(1);
         when(requestMapper.selectById(20L)).thenReturn(request);
         when(requestMapper.markProcessing(eq(20L), any())).thenReturn(1);
@@ -119,7 +119,7 @@ class SmsOutboxWorkerTest {
         SmsOutboxEvent event = pendingEvent();
         SmsSendRequest request = pendingRequest();
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of());
-        when(outboxMapper.selectPending(20)).thenReturn(List.of(event));
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of(event));
         when(outboxMapper.claim(eq(10L), anyString(), any(), any())).thenReturn(1);
         when(requestMapper.selectById(20L)).thenReturn(request);
         when(requestMapper.markProcessing(eq(20L), any())).thenReturn(1);
@@ -150,7 +150,7 @@ class SmsOutboxWorkerTest {
         SmsOutboxEvent event = pendingEvent();
         SmsSendRequest request = pendingRequest();
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of());
-        when(outboxMapper.selectPending(20)).thenReturn(List.of(event));
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of(event));
         when(outboxMapper.claim(eq(10L), anyString(), any(), any())).thenReturn(1);
         when(requestMapper.selectById(20L)).thenReturn(request);
         when(requestMapper.markProcessing(eq(20L), any())).thenReturn(1);
@@ -241,7 +241,7 @@ class SmsOutboxWorkerTest {
         SmsOutboxEvent event = event(10L, 20L, 0);
         SmsSendRequest request = request(20L);
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of());
-        when(outboxMapper.selectPending(20)).thenReturn(List.of(event));
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of(event));
         when(outboxMapper.claim(eq(10L), anyString(), any(), any())).thenReturn(1);
         when(requestMapper.selectById(20L)).thenReturn(request);
         when(requestMapper.markProcessing(eq(20L), any())).thenReturn(1);
@@ -273,7 +273,7 @@ class SmsOutboxWorkerTest {
         SmsOutboxEvent event = event(10L, 20L, 0);
         SmsSendRequest request = request(20L);
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of());
-        when(outboxMapper.selectPending(20)).thenReturn(List.of(event));
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of(event));
         when(outboxMapper.claim(eq(10L), anyString(), any(), any())).thenReturn(1);
         when(requestMapper.selectById(20L)).thenReturn(request);
         when(requestMapper.markProcessing(eq(20L), any())).thenReturn(1);
@@ -299,7 +299,7 @@ class SmsOutboxWorkerTest {
         SmsOutboxEvent staleEvent = event(10L, 20L, 0);
         staleEvent.setLeaseOwner("expired-worker");
         when(outboxMapper.selectStaleProcessing(any(), eq(20))).thenReturn(List.of(staleEvent));
-        when(outboxMapper.selectPending(20)).thenReturn(List.of());
+        when(outboxMapper.selectPending(eq(20), any(java.time.LocalDateTime.class))).thenReturn(List.of());
         when(outboxMapper.markUnknown(eq(10L), eq("expired-worker"), anyString(), any())).thenReturn(0);
 
         worker(properties, outboxMapper, requestMapper, recordMapper, mock(SmsRateLimiter.class),

@@ -138,18 +138,18 @@ public class ReviewServiceImpl implements com.nursing.feedback.service.ReviewSer
 
     private String requireIdempotentKey(String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey)) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is required");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotency-Key is required");
         }
         String key = idempotentKey.trim();
         if (key.length() > 128) {
-            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotent-Key is too long");
+            throw new BusinessException(ApiCode.PARAM_ERROR, "Idempotency-Key is too long");
         }
         return key;
     }
 
     private ReviewSubmitResponse replayExisting(IdempotentRecord record, String requestHash) {
         if (!Objects.equals(record.getRequestHash(), requestHash)) {
-            throw new BusinessException(ApiCode.CONFLICT, "Idempotent-Key was reused with a different request");
+            throw new BusinessException(ApiCode.CONFLICT, "Idempotency-Key was reused with a different request");
         }
         if (Integer.valueOf(IDEMPOTENT_COMPLETED).equals(record.getStatus()) && record.getBizId() != null) {
             return new ReviewSubmitResponse(record.getBizId());

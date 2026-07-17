@@ -1,0 +1,115 @@
+/**
+ * 智慧护理平台 — 全局设计 Token
+ * "温润数智化" 设计系统 — 科技与温暖平衡
+ * 基于 uni-app 内置变量扩展，统一三名前端开发者的视觉规范
+ */
+
+/* ========================================
+ * 品牌色系（医疗科技蓝渐变）
+ * ======================================== */
+$primary-color: #3A7BF7;          // 主色 — 医疗科技蓝
+$primary-light: #00C2FF;          // 浅蓝 — 渐变终点 / 高亮
+$primary-dark: #2D6AD4;           // 深蓝 — 按压态
+$primary-bg: #EDF4FE;             // 极浅蓝 — 背景
+$primary-gradient: linear-gradient(135deg, #3A7BF7, #00C2FF);  // 主渐变
+
+/* 辅助色 */
+$success-color: #00B8A9;          // 健康青绿 — 成功/完成任务
+$warning-color: #FF8A5C;          // 温暖警戒橙 — 异常提醒（替代红色）
+$error-color: #FF5252;            // 错误（保留偏暖红色）
+$info-color: #8E9DAE;             // 信息灰
+
+/* ========================================
+ * 文字颜色（深海蓝灰系）
+ * ======================================== */
+$text-color: #1A2530;             // 主要文字 — 深海蓝灰
+$text-color-secondary: #6B7B8D;   // 次要文字
+$text-color-hint: #98A5B3;        // 提示/占位文字
+$text-color-disabled: #C5CDD8;    // 禁用文字
+$text-color-inverse: #FFFFFF;     // 反色文字
+
+/* ========================================
+ * 背景颜色（霜白 / 瓷感白）
+ * ======================================== */
+$bg-color: #FFFFFF;
+$bg-color-grey: #F6F8FC;          // 霜白基底
+$bg-color-hover: #F0F3F8;         // 悬停浅灰
+$bg-color-mask: rgba(20, 30, 45, 0.45);  // 蒙层（深海蓝调）
+
+/* 玻璃拟态卡片 */
+$glass-bg: rgba(255, 255, 255, 0.55);
+$glass-blur: blur(20px);
+$glass-border: 1px solid rgba(255, 255, 255, 0.6);
+$glass-bg-strong: rgba(255, 255, 255, 0.78);
+$glass-border-soft: 1px solid rgba(255, 255, 255, 0.82);
+
+/* ========================================
+ * 边框 & 分割线
+ * ======================================== */
+$border-color: #E4E9F0;
+$border-color-light: #F0F3F8;
+$divider-color: #EEF1F6;
+
+/* ========================================
+ * 字体大小
+ * ======================================== */
+$font-size-xs: 20rpx;             // 10px — 标签/角标
+$font-size-sm: 24rpx;             // 12px — 辅助文字
+$font-size-base: 28rpx;           // 14px — 正文
+$font-size-md: 32rpx;             // 16px — 标题
+$font-size-lg: 36rpx;             // 18px — 大标题
+$font-size-xl: 44rpx;             // 22px — 页面标题
+
+/* ========================================
+ * 间距（基于 8px 网格系统）
+ * ======================================== */
+$spacing-xs: 8rpx;                // 4px
+$spacing-sm: 16rpx;               // 8px
+$spacing-md: 24rpx;               // 12px
+$spacing-base: 32rpx;             // 16px
+$spacing-lg: 48rpx;               // 24px
+$spacing-xl: 64rpx;               // 32px
+
+/* ========================================
+ * 圆角
+ * ======================================== */
+$radius-sm: 8rpx;                 // 4px
+$radius-base: 12rpx;              // 6px
+$radius-md: 16rpx;                // 8px — 玻璃拟态卡片
+$radius-lg: 24rpx;                // 12px — 大卡片
+$radius-round: 9999rpx;           // 胶囊
+
+/* ========================================
+ * 阴影（柔和弥散光感）
+ * ======================================== */
+$shadow-sm: 0 2rpx 12rpx rgba(58, 123, 247, 0.06);
+$shadow-base: 0 4rpx 20rpx rgba(58, 123, 247, 0.08);
+$shadow-lg: 0 8rpx 36rpx rgba(58, 123, 247, 0.12);
+$shadow-card: 0 4rpx 24rpx rgba(0, 0, 0, 0.04);
+$shadow-glow: 0 0 24rpx rgba(58, 123, 247, 0.15);  // 主色呼吸光晕
+$shadow-float: 0 14rpx 42rpx rgba(42, 91, 170, 0.12);
+
+/* ========================================
+ * 组件尺寸
+ * ======================================== */
+$navbar-height: 88rpx;            // 导航栏高度
+$tabbar-height: 112rpx;           // 底部 TabBar 高度
+$button-height: 88rpx;            // 按钮高度
+$input-height: 88rpx;             // 输入框高度
+$card-padding: 24rpx;             // 卡片内边距
+$page-padding: 32rpx;             // 页面水平内边距
+$touch-min: 88rpx;                // 最小触控区 44×44pt
+
+/* ========================================
+ * 动画
+ * ======================================== */
+$transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-base: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-spring: 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);  // 弹性回弹
+
+/* ========================================
+ * 页面通用装饰
+ * ======================================== */
+$page-gradient: linear-gradient(180deg, #f8fbff 0%, #f6f8fc 42%, #f1f5fb 100%);
+$surface-gradient: linear-gradient(145deg, rgba(255,255,255,0.86), rgba(247,250,255,0.68));

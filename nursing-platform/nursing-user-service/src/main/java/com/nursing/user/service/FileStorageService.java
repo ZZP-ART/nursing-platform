@@ -225,7 +225,7 @@ public class FileStorageService {
 
     private void validateIdempotentKey(String idempotentKey) {
         if (!StringUtils.hasText(idempotentKey) || idempotentKey.length() > IDEMPOTENT_KEY_MAX_LENGTH) {
-            throw new UserBusinessException(HttpStatus.BAD_REQUEST, ApiCode.PARAM_ERROR, "Idempotent-Key不能为空或过长");
+            throw new UserBusinessException(HttpStatus.BAD_REQUEST, ApiCode.PARAM_ERROR, "Idempotency-Key不能为空或过长");
         }
     }
 
